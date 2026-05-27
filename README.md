@@ -1,28 +1,71 @@
-# Any Downloader
+<div align="center">
+  <img src="assets/icon.png" alt="Logo" width="120" height="120">
 
-A professional, high-performance video downloader powered by `yt-dlp` and `Flet`.
+  # 📥 Any Downloader
 
-## Features
-- **Modern UI**: Clean, dark-mode focused, Material 3 design.
-- **Robust Backend**: Uses `yt-dlp` to extract video and audio streams from thousands of websites.
-- **Format Selection**: Allows downloading best quality, audio-only, or specific video resolutions.
-- **Real-time Progress**: Displays download speed, ETA, and progress accurately.
+  **A professional, high-performance video and audio downloader.**
+  
+  <p>
+    <img src="https://img.shields.io/badge/Python-3.8+-blue.svg?logo=python&logoColor=white" alt="Python Version">
+    <img src="https://img.shields.io/badge/Flet-UI-orange.svg?logo=flutter&logoColor=white" alt="Flet">
+    <img src="https://img.shields.io/badge/yt--dlp-Backend-red.svg?logo=youtube&logoColor=white" alt="yt-dlp">
+    <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+  </p>
+</div>
 
-## Requirements
-- Python 3.8+
-- `flet`
-- `yt-dlp`
-- `ffmpeg` (Required for post-processing audio extractions to `.mp3` format)
+<br>
 
-## Installation & Running
+Welcome to **Any Downloader**, a sleek, modern desktop application built to fetch high-quality media from thousands of websites with ease. Powered by `yt-dlp` and featuring a beautiful Material 3 interface via `Flet`.
 
-1. Install the Python dependencies:
+---
+
+## ✨ Features
+
+- 🎨 **Modern UI**: Clean, responsive, and dark-mode focused layout following Material 3 design principles.
+- ⚡ **Robust Backend**: Seamlessly extracts video and audio streams across the web using the powerful `yt-dlp` engine.
+- 🎯 **Format Selection**: Take control of your downloads—choose the best overall quality, grab audio only (MP3), or specify exact video resolutions.
+- 📊 **Real-time Progress**: Stay informed with accurate live updates showing download speed, estimated time of arrival (ETA), and progress bars.
+- 🛠️ **Built-in Post-Processing**: Automatically converts and refines media formats utilizing `ffmpeg`.
+
+## 📸 Preview
+
+<div align="center">
+  <img src="Screenshots/1.png" alt="Any Downloader Screenshot" width="800">
+  <p><i>You can view more images in the <a href="./Screenshots">Screenshots</a> directory.</i></p>
+</div>
+
+## 🚀 Getting Started
+
+### 📋 Prerequisites
+
+Before you begin, ensure you have the following installed on your machine:
+
+- 🐍 **Python 3.8** or higher
+- 🎵 **[ffmpeg](https://ffmpeg.org/download.html)** (Required for post-processing audio extractions to `.mp3` format. *Make sure it's added to your system's PATH.*)
+
+### ⚙️ Installation
+
+1. **Clone the repository** (or download the source code):
+   ```bash
+   git clone https://github.com/sayandey021/AnyDownloader.git
+   cd AnyDownloader
+   ```
+
+2. **Install dependencies**:
+   Run the following command to install required packages (`flet`, `yt-dlp`, etc.):
    ```bash
    pip install -r requirements.txt
    ```
-2. Run the application:
-   ```bash
-   python main.py
-   ```
 
-*Note: For the best experience (e.g. extracting audio to mp3), make sure `ffmpeg` is installed on your system and added to your system's PATH.*
+### 💻 Usage
+
+Launch the application simply by running:
+```bash
+python main.py
+```
+
+---
+
+<div align="center">
+  <i>Developed with ❤️ for seamless media downloading.</i>
+</div>
