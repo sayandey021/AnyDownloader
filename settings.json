@@ -18,7 +18,7 @@
   "cookies_path": null,
   "accent_color": "Indigo",
   "bg_image_path": "/bg_2.png",
-  "bg_image_opacity": 0.45,
+  "bg_image_opacity": 0.19,
   "close_behavior": "prompt",
   "ask_on_close": true
 }

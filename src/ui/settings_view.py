@@ -472,9 +472,9 @@ class SettingsView(ft.Container):
         ], scroll=ft.ScrollMode.AUTO, spacing=10)
 
         self.bg_opacity_slider = ft.Slider(
-            min=0.0, max=1.0, divisions=20,
-            value=self.settings.get('bg_image_opacity', 0.1),
-            label="{value}",
+            min=0, max=100, divisions=100,
+            value=int(self.settings.get('bg_image_opacity', 0.1) * 100),
+            label="{value}%",
             on_change_end=self._on_theme_change,
             active_color=AppTheme.PRIMARY,
         )
@@ -782,7 +782,7 @@ class SettingsView(ft.Container):
         new_theme = self.theme_dropdown.value
         new_accent = self.accent_dropdown.value
         new_bg = self.bg_image_path
-        new_opacity = self.bg_opacity_slider.value
+        new_opacity = self.bg_opacity_slider.value / 100.0
         
         self.settings.set('theme', new_theme)
         self.settings.set('accent_color', new_accent)
@@ -803,7 +803,13 @@ class SettingsView(ft.Container):
         self._page.update()
         
         if self.on_theme_changed:
-            self.on_theme_changed()
+            import inspect
+            sig = inspect.signature(self.on_theme_changed)
+            if 'show_notification' in sig.parameters:
+                is_slider = e is not None and getattr(e, 'control', None) == getattr(self, 'bg_opacity_slider', None)
+                self.on_theme_changed(show_notification=not is_slider)
+            else:
+                self.on_theme_changed()
 
     def _close(self, e):
         if self._on_close:

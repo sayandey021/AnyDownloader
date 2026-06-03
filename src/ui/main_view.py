@@ -343,7 +343,7 @@ class MainView(ft.Container):
         self.refresh_downloads_list()
         self.safe_update()
 
-    def rebuild_app(self):
+    def rebuild_app(self, show_notification=True):
         # Hot-swap the entire MainView on the page to instantly apply the new theme globally
         self._page.controls.clear()
         
@@ -363,7 +363,8 @@ class MainView(ft.Container):
         new_view.on_nav_change(DummyEvent())
         
         self._page.add(new_view)
-        new_view.show_snack("Theme instantly applied across all screens!", AppTheme.SUCCESS)
+        if show_notification:
+            new_view.show_snack("Theme applied!", AppTheme.SUCCESS)
 
     def safe_update(self):
         try:
