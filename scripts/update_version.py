@@ -20,9 +20,13 @@ def main():
     ui_version = new_version
 
     print(f"Updating version to UI: {ui_version}, Windows: {win_version}")
+    
+    # Use absolute paths so the script can be run from anywhere
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(script_dir, '..'))
 
     # 1. Update src/ui/about_view.py
-    about_path = os.path.join('src', 'ui', 'about_view.py')
+    about_path = os.path.join(repo_root, 'src', 'ui', 'about_view.py')
     if os.path.exists(about_path):
         with open(about_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -32,9 +36,11 @@ def main():
         with open(about_path, 'w', encoding='utf-8') as f:
             f.write(content)
         print(f"Updated {about_path}")
+    else:
+        print(f"Warning: Could not find {about_path}")
 
     # 2. Update build_msix.ps1
-    msix_path = 'build_msix.ps1'
+    msix_path = os.path.join(script_dir, 'build_msix.ps1')
     if os.path.exists(msix_path):
         with open(msix_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -44,9 +50,11 @@ def main():
         with open(msix_path, 'w', encoding='utf-8') as f:
             f.write(content)
         print(f"Updated {msix_path}")
+    else:
+        print(f"Warning: Could not find {msix_path}")
 
     # 3. Update build.bat
-    bat_path = 'build.bat'
+    bat_path = os.path.join(script_dir, 'build.bat')
     if os.path.exists(bat_path):
         with open(bat_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -57,6 +65,8 @@ def main():
         with open(bat_path, 'w', encoding='utf-8') as f:
             f.write(content)
         print(f"Updated {bat_path}")
+    else:
+        print(f"Warning: Could not find {bat_path}")
 
     print("Version update complete!")
 

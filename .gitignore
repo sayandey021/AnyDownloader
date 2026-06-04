@@ -5,3 +5,4 @@ ffmpeg/
 temp/
 __pycache__/
 *.pyc
+MsixTemp/

@@ -34,7 +34,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.1", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.2", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         

@@ -37,7 +37,7 @@ def patch_flet_exe():
         print("Downloading rcedit-x64.exe...")
         urllib.request.urlretrieve(rcedit_url, rcedit_path)
 
-    icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "icon.ico"))
+    icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "icon.ico"))
     
     print("Patching flet.exe resources...")
     commands = [
