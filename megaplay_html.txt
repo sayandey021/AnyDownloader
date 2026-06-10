@@ -1,0 +1,68 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>File 161793 - MegaPlay</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta http-equiv="content-language" content="en" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="shortcut icon" href="/images/favicon.png" type="image/x-icon" />
+    <link rel="stylesheet" type="text/css" href="https://megaplay.buzz/lib/app.css?v=1" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-5FDVV0W2WD"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', 'G-5FDVV0W2WD');
+    </script>
+    <script>
+        const settings = {
+            time: 0,
+            autoPlay: "1",
+            playOriginalAudio: "1",
+            autoSkipIntro: "0",
+            vast: 0,
+            base_url: 'https://megaplay.buzz/',
+            domain2_url: 'Array',
+            type: 'sub',
+            cid : '494e',
+            cidu : '6a232471704cb',
+        };
+    </script>
+</head>
+
+<body>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #000;
+        }
+        iframe.s5-embed {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            border: 0;
+        }
+    </style>
+    <iframe
+        class="s5-embed"
+        src="https://megaplay.buzz/stream/s-5/142018/sub"
+        allow="autoplay; fullscreen"
+        allowfullscreen>
+    </iframe>
+    <script>
+        window.addEventListener('message', function (event) {
+            window.parent.postMessage(event.data, '*');
+        });
+    </script>
+<script src="https://megaplay.buzz/lib/app.main.js?v=6a232471704d1"></script>
+<script defer data-domain="megaplaynew.buzz" src="https://statlytic.net/js/script.js"></script>
+</body>
+
+</html>

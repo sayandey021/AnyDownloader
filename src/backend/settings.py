@@ -13,7 +13,7 @@ else:
     SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'settings.json')
 DEFAULTS = {
     'default_download_path': os.path.join(os.path.expanduser('~'), 'Downloads'),
-    'temp_download_path': tempfile.gettempdir(),
+    'temp_download_path': os.path.join(tempfile.gettempdir(), 'Any Downloader'),
     'preferred_format': 'best',
     'audio_codec': 'mp3',
     'audio_quality': '192',

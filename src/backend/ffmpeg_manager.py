@@ -7,7 +7,7 @@ import sys
 
 import requests
 
-FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+FFMPEG_URL = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
 def get_local_ffmpeg_dir():
     """Returns the local directory where FFmpeg should be installed."""

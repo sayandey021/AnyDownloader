@@ -3,6 +3,7 @@ from src.ui.theme import AppTheme
 from src.backend.downloader import DownloaderBackend
 from src.backend.settings import SettingsManager
 from src.backend.history import HistoryManager
+from src.backend.search_history import SearchHistoryManager
 from src.ui.settings_view import SettingsView
 from src.ui.download_card import DownloadCard
 from src.ui.fetch_dialog import FetchDialog
@@ -24,10 +25,11 @@ class MainView(ft.Container):
         self.backend = DownloaderBackend(run_thread=self._page.run_thread)
         self.settings = SettingsManager()
         self.history_manager = HistoryManager()
+        self.search_history_manager = SearchHistoryManager()
         
         self.all_downloads = []
         self.downloads_list_container = ft.Container(expand=True)
-        self.current_mode = "video"
+        self.current_mode = "search"
         self.setup_ui()
         self.load_history()
 
@@ -82,19 +84,19 @@ class MainView(ft.Container):
             ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             destinations=[
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.PERM_MEDIA_OUTLINED, 
-                    selected_icon=ft.Icons.PERM_MEDIA, 
-                    label="Media"
-                ),
-                ft.NavigationRailDestination(
-                    icon=ft.Icons.AUDIOTRACK_OUTLINED, 
-                    selected_icon=ft.Icons.AUDIOTRACK, 
-                    label="Audio"
+                    icon=ft.Icons.SEARCH_OUTLINED, 
+                    selected_icon=ft.Icons.SEARCH, 
+                    label="Search"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.HISTORY_OUTLINED, 
                     selected_icon=ft.Icons.HISTORY, 
                     label="History"
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.DOWNLOAD_OUTLINED, 
+                    selected_icon=ft.Icons.DOWNLOAD, 
+                    label="Downloads"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SETTINGS_OUTLINED, 
@@ -127,15 +129,16 @@ class MainView(ft.Container):
 
         # URL Input
         self.url_input = ft.TextField(
-            label="Media or Playlist URL",
-            hint_text="Paste YouTube, Pinterest, Instagram, Twitter, Vimeo, or other supported URL here",
+            hint_text="Paste YouTube, Spotify, Instagram, or any link here...",
             expand=True,
-            border_color=AppTheme.SURFACE_VARIANT,
+            border_color=ft.Colors.TRANSPARENT,
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
             prefix_icon=ft.Icons.LINK_ROUNDED,
+            text_size=16,
+            content_padding=20,
             on_submit=self.fetch_info
         )
         
@@ -143,10 +146,10 @@ class MainView(ft.Container):
             "Search",
             icon=ft.Icons.SEARCH_ROUNDED,
             style=ft.ButtonStyle(
-                color=AppTheme.TEXT_PRIMARY,
+                color=ft.Colors.WHITE,
                 bgcolor=AppTheme.PRIMARY,
-                shape=ft.RoundedRectangleBorder(radius=10),
-                padding=20
+                shape=ft.RoundedRectangleBorder(radius=12),
+                padding=ft.Padding(left=24, right=24, top=18, bottom=18),
             ),
             on_click=self.fetch_info
         )
@@ -210,18 +213,164 @@ class MainView(ft.Container):
         )
 
         # Main Layout Content Area
-        self.downloads_view = ft.Column([
+        
+        # Search View
+        search_icon = ft.Icon(ft.Icons.CLOUD_DOWNLOAD_OUTLINED, size=64, color=AppTheme.PRIMARY)
+        search_title = ft.Text("Download Anything", size=42, weight=ft.FontWeight.W_900, color=AppTheme.TEXT_PRIMARY, text_align=ft.TextAlign.CENTER)
+        search_subtitle = ft.Text("Paste a link below to instantly download video or audio in high quality.", size=16, color=AppTheme.TEXT_SECONDARY, text_align=ft.TextAlign.CENTER)
+        
+        # Supported platforms chips
+        def platform_chip(text, icon, on_click=None):
+            return ft.Container(
+                content=ft.Row([ft.Icon(icon, size=16, color=AppTheme.TEXT_SECONDARY), ft.Text(text, size=13, color=AppTheme.TEXT_SECONDARY)], spacing=4),
+                padding=ft.Padding(left=12, right=12, top=6, bottom=6),
+                bgcolor=AppTheme.SURFACE,
+                border_radius=20,
+                on_click=on_click,
+                tooltip="Show all supported sites" if text == "More..." else None,
+            )
+
+        def _show_supported_sites(e):
+            supported_list = [
+                ("YouTube", ft.Icons.SMART_DISPLAY_ROUNDED, ft.Colors.RED),
+                ("YT Music", ft.Icons.PLAY_CIRCLE_ROUNDED, ft.Colors.RED_600),
+                ("Spotify", ft.Icons.LIBRARY_MUSIC_ROUNDED, ft.Colors.GREEN),
+                ("Apple Music", ft.Icons.APPLE, ft.Colors.RED_ACCENT),
+                ("Instagram", ft.Icons.CAMERA_ALT_ROUNDED, ft.Colors.PINK),
+                ("Twitter / X", ft.Icons.ALTERNATE_EMAIL_ROUNDED, ft.Colors.BLUE),
+                ("Facebook", ft.Icons.FACEBOOK_ROUNDED, ft.Colors.BLUE_700),
+                ("TikTok", ft.Icons.MUSIC_NOTE_ROUNDED, ft.Colors.BLACK87),
+                ("SoundCloud", ft.Icons.CLOUD_ROUNDED, ft.Colors.ORANGE),
+                ("Twitch", ft.Icons.LIVE_TV_ROUNDED, ft.Colors.PURPLE),
+                ("Vimeo", ft.Icons.ONDEMAND_VIDEO_ROUNDED, ft.Colors.BLUE_400),
+                ("Reddit", ft.Icons.FORUM_ROUNDED, ft.Colors.ORANGE_900),
+                ("Tidal", ft.Icons.WAVES_ROUNDED, ft.Colors.CYAN),
+                ("Deezer", ft.Icons.EQUALIZER_ROUNDED, ft.Colors.PURPLE_ACCENT),
+                ("JioSaavn", ft.Icons.LIBRARY_MUSIC_ROUNDED, ft.Colors.GREEN_600),
+                ("Gaana", ft.Icons.MUSIC_NOTE_ROUNDED, ft.Colors.RED_400),
+                ("Last.fm", ft.Icons.RADIO_ROUNDED, ft.Colors.RED_600),
+                ("Pinterest", ft.Icons.PIN_DROP_ROUNDED, ft.Colors.RED_800),
+                ("LinkedIn", ft.Icons.WORK_ROUNDED, ft.Colors.BLUE_800),
+                ("Bandcamp", ft.Icons.ALBUM_ROUNDED, ft.Colors.TEAL),
+                ("Dailymotion", ft.Icons.VIDEO_LIBRARY_ROUNDED, ft.Colors.BLUE_600),
+                ("Tumblr", ft.Icons.ARTICLE_ROUNDED, ft.Colors.INDIGO_400),
+                ("Rumble", ft.Icons.PLAY_ARROW_ROUNDED, ft.Colors.GREEN_400),
+                ("Bilibili", ft.Icons.TV_ROUNDED, ft.Colors.LIGHT_BLUE),
+                ("Snapchat", ft.Icons.CHAT_BUBBLE_ROUNDED, ft.Colors.YELLOW_700),
+                ("VK", ft.Icons.GROUPS_ROUNDED, ft.Colors.BLUE_ACCENT),
+                ("Mixcloud", ft.Icons.CLOUD_CIRCLE_ROUNDED, ft.Colors.BLUE_200),
+                ("Audiomack", ft.Icons.HEADSET_ROUNDED, ft.Colors.ORANGE_600),
+            ]
+            
+            grid = ft.GridView(
+                expand=True,
+                runs_count=4,
+                max_extent=150,
+                child_aspect_ratio=1.0,
+                spacing=10,
+                run_spacing=10,
+                padding=ft.Padding(left=0, top=0, right=15, bottom=0),
+            )
+            
+            for site, icon, color in supported_list:
+                grid.controls.append(
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Icon(icon, size=40, color=color),
+                            ft.Text(site, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY, text_align=ft.TextAlign.CENTER)
+                        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                        bgcolor=AppTheme.SURFACE_VARIANT,
+                        border_radius=10,
+                        padding=10
+                    )
+                )
+            
+            def close_dlg(e):
+                dlg.open = False
+                self._page.update()
+                
+            dlg = ft.AlertDialog(
+                title=ft.Row([ft.Icon(ft.Icons.PUBLIC_ROUNDED, color=AppTheme.PRIMARY), ft.Text("Supported Sites", weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY)]),
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text("Any Downloader natively supports fetching from 1000+ websites. Here are some popular ones:", color=AppTheme.TEXT_SECONDARY),
+                        ft.Container(content=grid, height=350, width=500),
+                        ft.TextButton(
+                            "View all 1000+ supported sites", 
+                            icon=ft.Icons.OPEN_IN_NEW_ROUNDED,
+                            url="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"
+                        )
+                    ], tight=True, spacing=15),
+                    width=500,
+                ),
+                bgcolor=AppTheme.SURFACE,
+                shape=ft.RoundedRectangleBorder(radius=10),
+                actions=[
+                    ft.TextButton("Close", on_click=close_dlg)
+                ],
+            )
+            self._page.overlay.append(dlg)
+            dlg.open = True
+            self._page.update()
+            
+        platforms_row = ft.Row([
+            platform_chip("YouTube", ft.Icons.SMART_DISPLAY_ROUNDED),
+            platform_chip("Spotify", ft.Icons.AUDIOTRACK_OUTLINED),
+            platform_chip("Instagram", ft.Icons.CAMERA_ALT_OUTLINED),
+            platform_chip("Twitter", ft.Icons.CHAT_BUBBLE_OUTLINE),
+            platform_chip("More...", ft.Icons.MORE_HORIZ, on_click=_show_supported_sites),
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
+        
+        # Create a container around the input row to constrain its width
+        search_box_container = ft.Container(
+            content=self.input_row,
+            width=700,
+            padding=ft.Padding(left=0, right=0, top=10, bottom=10)
+        )
+        
+        self.search_view = ft.Column([
+            ft.Container(expand=True),  # Spacer
+            ft.Column([
+                search_icon,
+                ft.Container(height=10),
+                search_title,
+                search_subtitle,
+                ft.Container(height=30),
+                search_box_container,
+                ft.Container(height=20),
+                platforms_row
+            ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Container(expand=True)   # Spacer
+        ], expand=True)
+
+        # Search History View
+        self.clear_search_history_btn = ft.TextButton(
+            "Clear All",
+            icon=ft.Icons.DELETE_SWEEP_ROUNDED,
+            style=ft.ButtonStyle(color=AppTheme.ERROR),
+            on_click=self.clear_all_search_history
+        )
+        self.search_history_list = ft.ListView(expand=True, spacing=10)
+        self.search_history_view = ft.Column([
+            ft.Row([
+                ft.Text("Search History", size=28, weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY),
+                ft.Container(expand=True),
+                self.clear_search_history_btn
+            ], alignment=ft.MainAxisAlignment.START),
+            ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
+            self.search_history_list
+        ], expand=True)
+
+        # Downloads View
+        self.history_view = ft.Column([
             header,
             self.history_toolbar,
             ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
-            self.input_row,
-            ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
-            ft.Text("Downloads", color=AppTheme.TEXT_SECONDARY, size=16, weight=ft.FontWeight.W_600),
             self.downloads_list_container
         ], expand=True)
 
         self.main_area = ft.Container(
-            content=self.downloads_view,
+            content=self.search_view,
             expand=True,
             padding=30
         )
@@ -292,33 +441,56 @@ class MainView(ft.Container):
         dlg.open = True
         self._page.update()
 
+    def clear_all_search_history(self, e):
+        def on_confirm(e):
+            dlg.open = False
+            self._page.update()
+            
+            self.search_history_manager.clear_all()
+            self.refresh_search_history()
+            self.show_snack("Search history cleared", AppTheme.SUCCESS)
+            
+        def on_cancel(e):
+            dlg.open = False
+            self._page.update()
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("Clear Search History", color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
+            content=ft.Text("Are you sure you want to clear all your search history?", color=AppTheme.TEXT_SECONDARY),
+            bgcolor=AppTheme.SURFACE,
+            shape=ft.RoundedRectangleBorder(radius=10),
+            actions=[
+                ft.TextButton("Cancel", on_click=on_cancel, style=ft.ButtonStyle(color=AppTheme.TEXT_SECONDARY)),
+                ft.TextButton("Clear", style=ft.ButtonStyle(color=AppTheme.ERROR), on_click=on_confirm),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self._page.overlay.append(dlg)
+        dlg.open = True
+        self._page.update()
+
     def on_nav_change(self, e):
         idx = e.control.selected_index
         if idx == 0:
-            self.current_mode = "video"
-            self.header_text.value = "Media Downloader"
+            self.current_mode = "search"
+            self.header_text.value = "Search"
             self.url_input.label = "Media or Playlist URL"
-            self.url_input.hint_text = "Paste YouTube, Pinterest, Instagram, Twitter, Vimeo, or other supported URL here"
+            self.url_input.hint_text = "Paste YouTube, Spotify, Instagram, or other supported URL here"
             self.input_row.visible = True
             self.history_toolbar.visible = False
             self.clear_all_btn.visible = False
-            self.main_area.content = self.downloads_view
+            self.main_area.content = self.search_view
         elif idx == 1:
-            self.current_mode = "audio"
-            self.header_text.value = "Audio Downloader"
-            self.url_input.label = "Audio or Playlist URL"
-            self.url_input.hint_text = "Paste Spotify, SoundCloud, Gaana, Last.fm, JioSaavn, or other audio URL here"
-            self.input_row.visible = True
-            self.history_toolbar.visible = False
-            self.clear_all_btn.visible = False
-            self.main_area.content = self.downloads_view
+            self.current_mode = "search_history"
+            self.refresh_search_history()
+            self.main_area.content = self.search_history_view
         elif idx == 2:
-            self.current_mode = "history"
-            self.header_text.value = "Download History"
+            self.current_mode = "downloads"
+            self.header_text.value = "Downloads"
             self.input_row.visible = False
             self.history_toolbar.visible = True
             self.clear_all_btn.visible = True
-            self.main_area.content = self.downloads_view
+            self.main_area.content = self.history_view
         elif idx == 3:
             self.current_mode = "settings"
             self.header_text.value = "Settings"
@@ -380,18 +552,6 @@ class MainView(ft.Container):
             self.show_snack("Please enter a valid URL", AppTheme.ERROR)
             return
 
-        if self.current_mode == "video":
-            if (self.backend.is_spotify_url(url) or 
-                self.backend.is_applemusic_url(url) or 
-                self.backend.is_tidal_url(url) or 
-                self.backend.is_deezer_url(url) or 
-                self.backend.is_gaana_url(url) or
-                self.backend.is_lastfm_url(url) or
-                "soundcloud.com" in url or 
-                "jiosaavn.com" in url):
-                self.show_snack("Audio links only work in Audio mode. Please switch to the Audio tab.", AppTheme.ERROR)
-                return
-
         self._cancel_fetch = False
         self.set_loading(True)
         self.url_input.value = ""
@@ -413,6 +573,20 @@ class MainView(ft.Container):
             time.sleep(0.1) # Allow the fetching dialog to close properly
             
             if info:
+                title = info.get('title') or info.get('fulltitle') or 'Unknown Title'
+                thumb_url = info.get('thumbnail')
+                if not thumb_url and info.get('thumbnails'):
+                    thumb_url = info['thumbnails'][0]['url']
+                
+                # Fallback for playlists without a top-level thumbnail
+                if not thumb_url and info.get('entries'):
+                    entries = info.get('entries', [])
+                    if entries:
+                        first = entries[0]
+                        thumb_url = first.get('thumbnail') or (first.get('thumbnails', [{}])[0].get('url', '') if first.get('thumbnails') else '')
+
+                self.search_history_manager.add_search(url, title, thumb_url)
+
                 self.show_snack("Video info fetched!", AppTheme.SUCCESS)
                 self.open_fetch_dialog(info)
             else:
@@ -436,9 +610,74 @@ class MainView(ft.Container):
             self.settings, 
             on_download=self.add_download,
             on_close=self.clear_dialog,
-            audio_only_mode=(self.current_mode == "audio")
+            audio_only_mode=False
         )
         self._page.show_dialog(self._current_dialog)
+
+    def refresh_search_history(self):
+        items = self.search_history_manager.get_all()
+        self.search_history_list.controls.clear()
+        
+        if not items:
+            self.clear_search_history_btn.visible = False
+            self.search_history_list.controls.append(
+                ft.Container(
+                    content=ft.Text("No search history yet.", color=AppTheme.TEXT_SECONDARY, text_align=ft.TextAlign.CENTER),
+                    padding=40,
+                    alignment=ft.Alignment(0, 0)
+                )
+            )
+        else:
+            self.clear_search_history_btn.visible = True
+            for item in items:
+                url = item['url']
+                title = item.get('title', url)
+                thumb = item.get('thumbnail')
+                
+                def create_click_handler(u):
+                    def handler(e):
+                        self.url_input.value = u
+                        self.nav_rail.selected_index = 0
+                        class DummyControl:
+                            def __init__(self):
+                                self.selected_index = 0
+                        class DummyEvent:
+                            def __init__(self):
+                                self.control = DummyControl()
+                        self.on_nav_change(DummyEvent())
+                        self.fetch_info(None)
+                    return handler
+                    
+                def create_delete_handler(u):
+                    def handler(e):
+                        self.search_history_manager.remove_search(u)
+                        self.refresh_search_history()
+                    return handler
+                
+                tile = ft.Container(
+                    content=ft.Row([
+                        ft.Image(src=thumb, width=80, height=45, fit=ft.BoxFit.COVER, border_radius=4) if thumb else ft.Container(content=ft.Icon(ft.Icons.LINK, size=24, color=AppTheme.TEXT_SECONDARY), width=80, height=45, bgcolor=AppTheme.SURFACE_VARIANT, border_radius=4, alignment=ft.Alignment(0, 0)),
+                        ft.Column([
+                            ft.Text(title, size=16, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                            ft.Text(url, size=12, color=AppTheme.TEXT_SECONDARY, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+                        ], expand=True, spacing=2),
+                        ft.Row([
+                            ft.IconButton(ft.Icons.SEARCH, icon_color=AppTheme.PRIMARY, on_click=create_click_handler(url), tooltip="Search Again"),
+                            ft.IconButton(ft.Icons.DELETE_OUTLINE_ROUNDED, icon_color=AppTheme.ERROR, on_click=create_delete_handler(url), tooltip="Remove from History")
+                        ], spacing=0)
+                    ], spacing=15),
+                    padding=10,
+                    bgcolor=AppTheme.BACKGROUND,
+                    border_radius=8,
+                    on_click=create_click_handler(url),
+                    ink=True
+                )
+                self.search_history_list.controls.append(tile)
+        
+        try:
+            self.search_history_list.update()
+        except Exception:
+            pass
 
     def clear_dialog(self):
         if hasattr(self, '_current_dialog') and getattr(self._current_dialog, 'open', False):
@@ -528,6 +767,17 @@ class MainView(ft.Container):
         self.refresh_downloads_list()
         self.process_queue()
         
+        # Navigate to Downloads tab
+        if getattr(self, 'nav_rail', None):
+            self.nav_rail.selected_index = 2
+            class DummyControl:
+                def __init__(self):
+                    self.selected_index = 2
+            class DummyEvent:
+                def __init__(self):
+                    self.control = DummyControl()
+            self.on_nav_change(DummyEvent())
+        
     def process_queue(self):
         max_concurrent = int(self.settings.get('max_concurrent_downloads', 3))
         
@@ -560,17 +810,17 @@ class MainView(ft.Container):
         self.refresh_downloads_list(filter_val_override=e.control.value)
 
     def pause_all_downloads(self, e):
-        for card in self.all_downloads:
+        for card in list(self.all_downloads):
             if card.download_state == "active":
                 card.pause_download(e)
 
     def resume_all_downloads(self, e):
-        for card in self.all_downloads:
+        for card in list(self.all_downloads):
             if card.download_state == "paused":
                 card.resume_download(e)
 
     def stop_all_downloads(self, e):
-        for card in self.all_downloads:
+        for card in list(self.all_downloads):
             if card.download_state in ("active", "paused", "queued"):
                 card.stop_download(e)
 
@@ -610,12 +860,12 @@ class MainView(ft.Container):
         print(f"[DEBUG] refresh_downloads_list called. current_mode={self.current_mode}, f_val={f_val}, total_cards={len(self.all_downloads)}")
         
         # Create a completely new list to bypass Flet caching
-        new_list = ft.Column(expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
+        new_list = ft.ListView(expand=True, spacing=0, item_extent=96, auto_scroll=False)
         
         visible_count = 0
         for card in self.all_downloads:
             should_show = False
-            if self.current_mode == "history":
+            if self.current_mode == "downloads":
                 if f_val == "all":
                     should_show = True
                 elif f_val == "active" and card.download_state == "active":
@@ -631,7 +881,7 @@ class MainView(ft.Container):
                 elif f_val == "error" and card.download_state == "error":
                     should_show = True
             else:
-                should_show = (getattr(card, 'source_mode', 'audio' if card.is_audio else 'video') == self.current_mode and card.download_state in ("active", "paused", "queued"))
+                should_show = False
                 
             if should_show:
                 card.visible = True

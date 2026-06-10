@@ -2,6 +2,8 @@ import flet as ft
 import os
 from src.ui.theme import AppTheme
 from src.backend.settings import SettingsManager
+from src.backend.ffmpeg_manager import is_ffmpeg_available
+import importlib.util
 
 
 class SettingsView(ft.Container):
@@ -139,6 +141,43 @@ class SettingsView(ft.Container):
         )
         filename_row = ft.Row([self.filename_field, template_info_btn], spacing=5)
 
+        # ── Audio Settings ──
+        self.audio_codec_dropdown = ft.Dropdown(
+            label="Audio Codec",
+            width=200,
+            value=self.settings.get('audio_codec'),
+            border_color=AppTheme.SURFACE_VARIANT,
+            focused_border_color=AppTheme.PRIMARY,
+            color=AppTheme.TEXT_PRIMARY,
+            bgcolor=AppTheme.SURFACE,
+            border_radius=10,
+            options=[
+                ft.dropdown.Option(key="mp3", text="MP3"),
+                ft.dropdown.Option(key="aac", text="AAC"),
+                ft.dropdown.Option(key="opus", text="Opus"),
+                ft.dropdown.Option(key="flac", text="FLAC"),
+                ft.dropdown.Option(key="wav", text="WAV"),
+            ],
+        )
+
+        self.audio_quality_dropdown = ft.Dropdown(
+            label="Audio Bitrate (kbps)",
+            width=200,
+            value=self.settings.get('audio_quality'),
+            border_color=AppTheme.SURFACE_VARIANT,
+            focused_border_color=AppTheme.PRIMARY,
+            color=AppTheme.TEXT_PRIMARY,
+            bgcolor=AppTheme.SURFACE,
+            border_radius=10,
+            options=[
+                ft.dropdown.Option(key="320", text="320 kbps"),
+                ft.dropdown.Option(key="256", text="256 kbps"),
+                ft.dropdown.Option(key="192", text="192 kbps"),
+                ft.dropdown.Option(key="128", text="128 kbps"),
+                ft.dropdown.Option(key="96", text="96 kbps"),
+            ],
+        )
+
         download_section = self._section(
             "Download Settings",
             ft.Icons.DOWNLOAD_ROUNDED,
@@ -146,6 +185,9 @@ class SettingsView(ft.Container):
                 ft.Row([self.path_field, browse_btn], spacing=10),
                 ft.Row([self.temp_path_field, temp_browse_btn], spacing=10),
                 ft.Row([self.format_dropdown, filename_row], spacing=20, wrap=True),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                ft.Text("Audio Extraction Default Settings", size=14, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
+                ft.Row([self.audio_codec_dropdown, self.audio_quality_dropdown], spacing=20, wrap=True),
             ],
         )
 
@@ -201,48 +243,7 @@ class SettingsView(ft.Container):
             ],
         )
 
-        # ── Audio Settings ──
-        self.audio_codec_dropdown = ft.Dropdown(
-            label="Audio Codec",
-            width=200,
-            value=self.settings.get('audio_codec'),
-            border_color=AppTheme.SURFACE_VARIANT,
-            focused_border_color=AppTheme.PRIMARY,
-            color=AppTheme.TEXT_PRIMARY,
-            bgcolor=AppTheme.SURFACE,
-            border_radius=10,
-            options=[
-                ft.dropdown.Option(key="mp3", text="MP3"),
-                ft.dropdown.Option(key="aac", text="AAC"),
-                ft.dropdown.Option(key="opus", text="Opus"),
-                ft.dropdown.Option(key="flac", text="FLAC"),
-                ft.dropdown.Option(key="wav", text="WAV"),
-            ],
-        )
-
-        self.audio_quality_dropdown = ft.Dropdown(
-            label="Audio Bitrate (kbps)",
-            width=200,
-            value=self.settings.get('audio_quality'),
-            border_color=AppTheme.SURFACE_VARIANT,
-            focused_border_color=AppTheme.PRIMARY,
-            color=AppTheme.TEXT_PRIMARY,
-            bgcolor=AppTheme.SURFACE,
-            border_radius=10,
-            options=[
-                ft.dropdown.Option(key="320", text="320 kbps"),
-                ft.dropdown.Option(key="256", text="256 kbps"),
-                ft.dropdown.Option(key="192", text="192 kbps"),
-                ft.dropdown.Option(key="128", text="128 kbps"),
-                ft.dropdown.Option(key="96", text="96 kbps"),
-            ],
-        )
-
-        audio_section = self._section(
-            "Audio Settings",
-            ft.Icons.MUSIC_NOTE_ROUNDED,
-            [ft.Row([self.audio_codec_dropdown, self.audio_quality_dropdown], spacing=20, wrap=True)],
-        )
+        # Audio Settings moved under Download Settings
 
         # ── Advanced Settings ──
         self.ask_on_close_switch = ft.Switch(
@@ -370,6 +371,23 @@ class SettingsView(ft.Container):
             color=AppTheme.TEXT_PRIMARY
         )
 
+        def _on_dev_mode_change(e):
+            self.settings.set('developer_mode', self.dev_mode_switch.value)
+            self.settings.save()
+            self._page.bgcolor = AppTheme.BACKGROUND
+            self.bgcolor = ft.Colors.TRANSPARENT
+            self.content = None
+            self._build_ui()
+            self.update()
+
+        self.dev_mode_switch = ft.Switch(
+            label="Developer Mode",
+            value=self.settings.get('developer_mode', False),
+            active_color=AppTheme.PRIMARY,
+            label_text_style=ft.TextStyle(color=AppTheme.TEXT_PRIMARY),
+            on_change=_on_dev_mode_change
+        )
+
         advanced_section = self._section(
             "Advanced",
             ft.Icons.TUNE_ROUNDED,
@@ -383,44 +401,53 @@ class SettingsView(ft.Container):
                 ft.Row([self.cookies_path_field, cookies_browse_btn], spacing=10),
                 ft.Text("Or login directly via embedded browser:", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Row([login_yt_btn, login_insta_btn, login_fb_btn, login_x_btn], spacing=10, wrap=True),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                self.dev_mode_switch,
             ],
         )
 
         # ── Theme ──
-        self.theme_dropdown = ft.Dropdown(
-            label="Theme",
-            width=200,
-            value=self.settings.get('theme'),
-            border_color=AppTheme.SURFACE_VARIANT,
-            focused_border_color=AppTheme.PRIMARY,
-            color=AppTheme.TEXT_PRIMARY,
-            bgcolor=AppTheme.SURFACE,
-            border_radius=10,
-            on_select=self._on_theme_change,
-            options=[
-                ft.dropdown.Option(key="dark", text="Dark"),
-                ft.dropdown.Option(key="light", text="Light"),
+        self.theme_segmented = ft.SegmentedButton(
+            selected=[self.settings.get('theme', 'dark')],
+            on_change=self._on_theme_change,
+            segments=[
+                ft.Segment(value="dark", label=ft.Text("Dark"), icon=ft.Icons.DARK_MODE_ROUNDED),
+                ft.Segment(value="light", label=ft.Text("Light"), icon=ft.Icons.LIGHT_MODE_ROUNDED),
             ],
+            selected_icon=ft.Icons.CHECK_CIRCLE_ROUNDED,
         )
 
-        self.accent_dropdown = ft.Dropdown(
-            label="Accent Color",
-            width=200,
-            value=self.settings.get('accent_color', 'Indigo'),
-            border_color=AppTheme.SURFACE_VARIANT,
-            focused_border_color=AppTheme.PRIMARY,
-            color=AppTheme.TEXT_PRIMARY,
-            bgcolor=AppTheme.SURFACE,
-            border_radius=10,
-            on_select=self._on_theme_change,
-            options=[
-                ft.dropdown.Option(key="Indigo", text="Indigo"),
-                ft.dropdown.Option(key="Emerald", text="Emerald"),
-                ft.dropdown.Option(key="Rose", text="Rose"),
-                ft.dropdown.Option(key="Amber", text="Amber"),
-                ft.dropdown.Option(key="Violet", text="Violet"),
-                ft.dropdown.Option(key="Sky", text="Sky"),
+        def _on_accent_change(color_name):
+            self.settings.set('accent_color', color_name)
+            self._on_theme_change(None)
+
+        def create_color_chip(color_name, hex_color):
+            is_selected = self.settings.get('accent_color', 'Indigo') == color_name
+            selected_side = ft.border.BorderSide(3, AppTheme.TEXT_PRIMARY)
+            unselected_side = ft.border.BorderSide(1, AppTheme.SURFACE_VARIANT)
+            
+            b_side = selected_side if is_selected else unselected_side
+            
+            return ft.Container(
+                width=40, height=40,
+                border_radius=20,
+                bgcolor=hex_color,
+                border=ft.border.Border(top=b_side, right=b_side, bottom=b_side, left=b_side),
+                tooltip=color_name,
+                on_click=lambda e, c=color_name: _on_accent_change(c),
+                animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+            )
+
+        self.color_chips_row = ft.Row(
+            controls=[
+                create_color_chip("Indigo", "#6366f1"),
+                create_color_chip("Emerald", "#10b981"),
+                create_color_chip("Rose", "#f43f5e"),
+                create_color_chip("Amber", "#f59e0b"),
+                create_color_chip("Violet", "#8b5cf6"),
+                create_color_chip("Sky", "#0ea5e9"),
             ],
+            wrap=True, spacing=10
         )
 
         # ── Background Image Overlay ──
@@ -472,7 +499,7 @@ class SettingsView(ft.Container):
         ], scroll=ft.ScrollMode.AUTO, spacing=10)
 
         self.bg_opacity_slider = ft.Slider(
-            min=0, max=100, divisions=100,
+            min=0, max=100, divisions=10,
             value=int(self.settings.get('bg_image_opacity', 0.1) * 100),
             label="{value}%",
             on_change_end=self._on_theme_change,
@@ -492,9 +519,172 @@ class SettingsView(ft.Container):
         ], spacing=10)
 
         theme_section = self._section("Appearance", ft.Icons.PALETTE_ROUNDED, [
-            ft.Row([self.theme_dropdown, self.accent_dropdown], spacing=20),
+            ft.Row([ft.Text("Theme:", color=AppTheme.TEXT_PRIMARY), self.theme_segmented], spacing=20),
+            ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+            ft.Column([
+                ft.Text("Accent Color:", color=AppTheme.TEXT_PRIMARY),
+                self.color_chips_row
+            ], spacing=10),
             ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
             bg_overlay_controls
+        ])
+
+        # ── Troubleshoot Settings ──
+        b_side = ft.border.BorderSide(1, AppTheme.SURFACE_VARIANT)
+        
+        def _build_dependency_row(name, is_installed):
+            icon = ft.Icons.CHECK_CIRCLE_ROUNDED if is_installed else ft.Icons.ERROR_ROUNDED
+            color = AppTheme.SUCCESS if is_installed else AppTheme.ERROR
+            return ft.Row([
+                ft.Icon(icon, color=color, size=20),
+                ft.Text(name, color=AppTheme.TEXT_PRIMARY, size=16),
+            ], spacing=10)
+
+        def _get_dependencies_status():
+            return [
+                ("yt-dlp (YouTube Download)", importlib.util.find_spec("yt_dlp") is not None),
+                ("spotdl (Spotify Download)", importlib.util.find_spec("spotdl") is not None),
+                ("requests (HTTP Client)", importlib.util.find_spec("requests") is not None),
+                ("beautifulsoup4 (HTML Parser)", importlib.util.find_spec("bs4") is not None),
+                ("AppleMusicMP3 (Apple Music)", importlib.util.find_spec("AppleMusicMP3") is not None),
+                ("curl_cffi (Bypass Protection)", importlib.util.find_spec("curl_cffi") is not None),
+                ("flet (UI Framework)", importlib.util.find_spec("flet") is not None),
+                ("Pillow (Image Processing)", importlib.util.find_spec("PIL") is not None),
+                ("FFmpeg (Audio/Video Processing)", is_ffmpeg_available()),
+            ]
+
+        health_icon = ft.Icon(ft.Icons.HELP_OUTLINE, size=40)
+        health_text = ft.Text(size=20, weight=ft.FontWeight.BOLD)
+        self.troubleshoot_column = ft.Column(spacing=10)
+
+        def _fix_dependencies(e):
+            if getattr(self, 'snack_bar', None) in self._page.overlay:
+                self._page.overlay.remove(self.snack_bar)
+            self.snack_bar = ft.SnackBar(
+                content=ft.Text("Fixing missing dependencies in background...", color=AppTheme.TEXT_PRIMARY),
+                bgcolor=AppTheme.PRIMARY,
+                duration=4000
+            )
+            self._page.overlay.append(self.snack_bar)
+            self.snack_bar.open = True
+            self._page.update()
+
+            def fix_task():
+                import sys, subprocess, os
+                from src.backend.ffmpeg_manager import download_ffmpeg, is_ffmpeg_available
+                
+                if not getattr(sys, 'frozen', False):
+                    req_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'requirements.txt')
+                    if os.path.exists(req_file):
+                        try:
+                            subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_file], check=False, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                        except Exception:
+                            pass
+
+                if not is_ffmpeg_available():
+                    try:
+                        download_ffmpeg()
+                    except Exception:
+                        pass
+
+                _update_troubleshoot_ui()
+                if getattr(self, 'snack_bar', None) in self._page.overlay:
+                    self._page.overlay.remove(self.snack_bar)
+                self.snack_bar = ft.SnackBar(
+                    content=ft.Text("Dependency fix attempt complete!", color=AppTheme.TEXT_PRIMARY),
+                    bgcolor=AppTheme.SUCCESS,
+                    duration=3000
+                )
+                self._page.overlay.append(self.snack_bar)
+                self.snack_bar.open = True
+                self._page.update()
+
+            import threading
+            threading.Thread(target=fix_task, daemon=True).start()
+
+        fix_btn = ft.ElevatedButton(
+            "Fix Missing",
+            icon=ft.Icons.AUTO_FIX_HIGH_ROUNDED,
+            on_click=_fix_dependencies,
+            bgcolor=AppTheme.PRIMARY,
+            color=ft.Colors.WHITE
+        )
+
+        def _update_troubleshoot_ui(e=None):
+            deps = _get_dependencies_status()
+            all_ok = all(installed for name, installed in deps)
+            
+            health_icon.name = ft.Icons.CHECK_CIRCLE_ROUNDED if all_ok else ft.Icons.ERROR_ROUNDED
+            health_icon.color = AppTheme.SUCCESS if all_ok else AppTheme.ERROR
+            health_text.value = "System Status: All Systems Normal" if all_ok else "System Status: Missing Dependencies"
+            health_text.color = AppTheme.SUCCESS if all_ok else AppTheme.ERROR
+            
+            fix_btn.visible = not all_ok
+            
+            content_list = []
+            for name, installed in deps:
+                content_list.append(_build_dependency_row(name, installed))
+            self.troubleshoot_column.controls = content_list
+            
+            try:
+                self.troubleshoot_column.update()
+                health_icon.update()
+                health_text.update()
+                fix_btn.update()
+            except:
+                pass
+
+        _update_troubleshoot_ui()
+
+        dll_text = ft.Text("Click 'Load DLLs' to view loaded modules for the current process.", size=12, color=AppTheme.TEXT_SECONDARY, selectable=True)
+        dll_container = ft.Container(
+            content=ft.Column([dll_text], scroll=ft.ScrollMode.AUTO),
+            height=150, padding=10, border=ft.border.Border(top=b_side, right=b_side, bottom=b_side, left=b_side),
+            bgcolor=AppTheme.SURFACE_VARIANT, border_radius=10
+        )
+        
+        def _load_dlls(e):
+            import subprocess, os
+            try:
+                pid = os.getpid()
+                output = subprocess.check_output(f'tasklist /m /fi "pid eq {pid}"', shell=True, text=True)
+                dll_text.value = output
+            except Exception as ex:
+                dll_text.value = f"Error fetching DLLs: {ex}"
+            dll_text.update()
+
+        load_dlls_btn = ft.ElevatedButton("Load System DLLs", icon=ft.Icons.DATA_OBJECT_ROUNDED, on_click=_load_dlls, bgcolor=AppTheme.SURFACE_VARIANT, color=AppTheme.TEXT_PRIMARY)
+
+        advanced_expansion = ft.ExpansionTile(
+            title=ft.Text("Advanced Diagnostics & DLLs", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
+            subtitle=ft.Text("View detailed dependency list and loaded modules", color=AppTheme.TEXT_SECONDARY),
+            controls=[
+                ft.Container(
+                    content=self.troubleshoot_column,
+                    padding=10,
+                    border=ft.border.Border(top=b_side, right=b_side, bottom=b_side, left=b_side),
+                    border_radius=10,
+                    bgcolor=AppTheme.SURFACE
+                ),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                ft.Row([load_dlls_btn]),
+                dll_container
+            ]
+        )
+
+        refresh_btn = ft.ElevatedButton(
+            "Refresh Status",
+            icon=ft.Icons.REFRESH_ROUNDED,
+            on_click=_update_troubleshoot_ui,
+            bgcolor=AppTheme.SURFACE_VARIANT,
+            color=AppTheme.TEXT_PRIMARY
+        )
+
+        troubleshoot_section = self._section("Troubleshoot", ft.Icons.BUILD_ROUNDED, [
+            ft.Row([health_icon, health_text], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([refresh_btn, fix_btn], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
+            ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
+            advanced_expansion
         ])
 
         # Bind auto-save to controls
@@ -530,30 +720,35 @@ class SettingsView(ft.Container):
         for control in auto_save_controls_blur:
             control.on_blur = self._save
 
+        tabs = [
+            ft.Tab(label="Appearance", icon=ft.Icons.PALETTE_ROUNDED),
+            ft.Tab(label="Download", icon=ft.Icons.DOWNLOAD_ROUNDED),
+            ft.Tab(label="Playlist & Queue", icon=ft.Icons.QUEUE_MUSIC_ROUNDED),
+            ft.Tab(label="Advanced", icon=ft.Icons.TUNE_ROUNDED),
+        ]
+        views = [
+            theme_section,
+            download_section,
+            playlist_section,
+            advanced_section,
+        ]
+
+        if self.settings.get('developer_mode', False):
+            tabs.append(ft.Tab(label="Troubleshoot", icon=ft.Icons.BUILD_ROUNDED))
+            views.append(troubleshoot_section)
+
         tab_bar = ft.TabBar(
-            tabs=[
-                ft.Tab(label="Appearance", icon=ft.Icons.PALETTE_ROUNDED),
-                ft.Tab(label="Download", icon=ft.Icons.DOWNLOAD_ROUNDED),
-                ft.Tab(label="Playlist & Queue", icon=ft.Icons.QUEUE_MUSIC_ROUNDED),
-                ft.Tab(label="Audio", icon=ft.Icons.MUSIC_NOTE_ROUNDED),
-                ft.Tab(label="Advanced", icon=ft.Icons.TUNE_ROUNDED),
-            ],
+            tabs=tabs,
             scrollable=True,
         )
 
         tab_view = ft.TabBarView(
-            controls=[
-                theme_section,
-                download_section,
-                playlist_section,
-                audio_section,
-                advanced_section,
-            ],
+            controls=views,
             expand=True
         )
 
         tabs_controller = ft.Tabs(
-            length=5,
+            length=len(tabs),
             selected_index=0,
             content=ft.Column([
                 tab_bar,
@@ -765,8 +960,9 @@ class SettingsView(ft.Container):
         self.sub_lang_field.value = self.settings.get('auto_subtitle_lang')
         self.browser_cookies_dropdown.value = self.settings.get('browser_cookies')
         self.cookies_path_field.value = self.settings.get('cookies_path')
-        self.theme_dropdown.value = self.settings.get('theme')
-        self.accent_dropdown.value = self.settings.get('accent_color', 'Indigo')
+        self.theme_segmented.selected = [self.settings.get('theme', 'dark')]
+        if hasattr(self, 'dev_mode_switch'):
+            self.dev_mode_switch.value = self.settings.get('developer_mode', False)
         try:
             self.update()
         except:
@@ -778,9 +974,9 @@ class SettingsView(ft.Container):
         self._page.update()
 
     def _on_theme_change(self, e):
-        """Apply theme instantly when the dropdown changes."""
-        new_theme = self.theme_dropdown.value
-        new_accent = self.accent_dropdown.value
+        """Apply theme instantly when the settings change."""
+        new_theme = self.theme_segmented.selected[0] if self.theme_segmented.selected else "dark"
+        new_accent = self.settings.get('accent_color', 'Indigo')
         new_bg = self.bg_image_path
         new_opacity = self.bg_opacity_slider.value / 100.0
         

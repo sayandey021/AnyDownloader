@@ -16,9 +16,10 @@
   "playlist_filename_template": "%(playlist_index)s - %(title)s.%(ext)s",
   "create_playlist_folder": true,
   "cookies_path": null,
-  "accent_color": "Indigo",
-  "bg_image_path": "/bg_2.png",
-  "bg_image_opacity": 0.2,
+  "accent_color": "Rose",
+  "bg_image_path": "/bg_4.png",
+  "bg_image_opacity": 0.5,
   "close_behavior": "prompt",
-  "ask_on_close": true
+  "ask_on_close": true,
+  "developer_mode": false
 }

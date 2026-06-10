@@ -443,7 +443,7 @@ class FetchDialog(ft.AlertDialog):
                 playlist_items_col.append(item_row)
 
             playlist_list = ft.Container(
-                content=ft.Column(playlist_items_col, spacing=2, scroll=ft.ScrollMode.AUTO),
+                content=ft.ListView(controls=playlist_items_col, spacing=0, item_extent=46, auto_scroll=False),
                 expand=True,
                 padding=4,
                 border_radius=8,
@@ -1025,10 +1025,13 @@ class FetchDialog(ft.AlertDialog):
         embed_subtitles = self.embed_subs_switch.value
         subtitle_lang = self.sub_lang_field.value.strip() or 'en'
         custom_filename = self.filename_field.value.strip() or None
+        
+        if is_thumbnail and self.is_playlist and custom_filename:
+            custom_filename = custom_filename.replace('%(playlist_index)s - ', '').replace('%(playlist_index)s ', '').replace('%(playlist_index)s', '')
 
         # Playlist: gather selected entries
         selected_entries = None
-        if self.is_playlist and 'entries' in self.info:
+        if self.is_playlist and 'entries' in self.info and not is_thumbnail:
             selected_entries = [entry for cb, entry, _ in self.playlist_checkboxes if cb.value]
             if not selected_entries:
                 return  # nothing selected

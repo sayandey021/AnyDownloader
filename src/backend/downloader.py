@@ -1469,8 +1469,9 @@ class DownloaderBackend:
                        video_ext=None, audio_codec=None, audio_quality=None,
                        settings=None, on_progress=None, on_finish=None, on_error=None,
                        embed_thumbnail=None, embed_subtitles=None, subtitle_lang=None,
-                       custom_filename=None, info=None, is_image=False, image_ext=None, is_thumbnail=False, on_log=None):
-        task_id = str(uuid.uuid4())
+                       custom_filename=None, info=None, is_image=False, image_ext=None, is_thumbnail=False, on_log=None, task_id=None):
+        if not task_id:
+            task_id = str(uuid.uuid4())
         self.active_tasks[task_id] = False
         final_downloaded_file = None
 
@@ -1488,6 +1489,13 @@ class DownloaderBackend:
                     thumb_url = info.get('thumbnail') if info else None
                     if not thumb_url and info and info.get('thumbnails'):
                         thumb_url = info['thumbnails'][0]['url']
+                        
+                    # Fallback for playlists without a top-level thumbnail
+                    if not thumb_url and info and info.get('_type') == 'playlist':
+                        entries = info.get('entries', [])
+                        if entries:
+                            first = entries[0]
+                            thumb_url = first.get('thumbnail') or (first.get('thumbnails', [{}])[0].get('url', '') if first.get('thumbnails') else '')
                     
                     if not thumb_url:
                         if on_error: on_error("No thumbnail found")

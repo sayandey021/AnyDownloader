@@ -34,7 +34,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.2", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.5", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         
@@ -71,7 +71,7 @@ class AboutView(ft.Container):
             url="https://ko-fi.com/sayandey"
         )
 
-        self.content = ft.Column([
+        main_content = ft.Column([
             logo,
             title,
             version,
@@ -85,3 +85,59 @@ class AboutView(ft.Container):
             support_text,
             kofi_btn
         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
+        def _show_version_history(e):
+            changelog_content = ft.Column([
+                ft.Text("v1.5 (Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Completely revamped search interface and centralized History tab\n• Redesigned Settings with modern UI components (Segmented buttons, color chips)\n• Improved playlist thumbnail fallback logic and filename formatting\n• Fixed developer options layout and Troubleshoot visibility\n• Reused download tasks for retries\n• Better setup screen with restart prompt", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.4", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Added automatic missing dependency installer on first startup\n• Significantly improved FFmpeg download speeds by switching to a faster GitHub mirror", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.3", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Complete redesign of Troubleshoot page with advanced system diagnostics\n• Added live 'Loaded System DLLs' viewer for Windows\n• Added smart 'Fix Missing' button that resolves dependencies silently\n• Improved image opacity slider step configuration\n• Improved Windows batch build scripts (CWD fixes)", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.2", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Added Version History in-app dialog\n• UI alignment fixes and Flet API updates\n• Improved background image settings", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.1", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Added Spotify and Apple Music support\n• Improved metadata embedding\n• Dark/Light theme enhancements", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Initial release\n• Basic YouTube downloading\n• Playlist support", color=AppTheme.TEXT_SECONDARY, size=13),
+            ], scroll=ft.ScrollMode.AUTO, height=300, width=450, spacing=5)
+            
+            def _close_dialog(e):
+                dlg.open = False
+                self._page.update()
+                
+            dlg = ft.AlertDialog(
+                title=ft.Row([ft.Icon(ft.Icons.HISTORY_ROUNDED, color=AppTheme.PRIMARY), ft.Text("Version History", color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.BOLD)]),
+                content=changelog_content,
+                bgcolor=AppTheme.SURFACE,
+                shape=ft.RoundedRectangleBorder(radius=10),
+                actions=[
+                    ft.TextButton("Close", on_click=_close_dialog)
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            self._page.overlay.append(dlg)
+            dlg.open = True
+            self._page.update()
+
+        version_history_btn = ft.Container(
+            content=ft.ElevatedButton(
+                "Version History",
+                icon=ft.Icons.HISTORY_ROUNDED,
+                color=AppTheme.TEXT_PRIMARY,
+                bgcolor=AppTheme.SURFACE_VARIANT,
+                on_click=_show_version_history
+            ),
+            alignment=ft.Alignment(1, -1),
+            padding=10
+        )
+
+        self.content = ft.Stack([
+            ft.Container(content=main_content, alignment=ft.Alignment(0, 0), expand=True),
+            version_history_btn
+        ], expand=True)

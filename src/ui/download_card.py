@@ -51,6 +51,13 @@ class DownloadCard(ft.Container):
         thumb_url = self.info.get('thumbnail')
         if not thumb_url and self.info.get('thumbnails'):
             thumb_url = self.info['thumbnails'][0]['url']
+            
+        # Fallback for playlists without a top-level thumbnail
+        if not thumb_url and self.info.get('entries'):
+            entries = self.info.get('entries', [])
+            if entries:
+                first = entries[0]
+                thumb_url = first.get('thumbnail') or (first.get('thumbnails', [{}])[0].get('url', '') if first.get('thumbnails') else '')
 
         # Determine if thumbnail should be square (1:1) or 16:9
         is_square = False
@@ -176,6 +183,7 @@ class DownloadCard(ft.Container):
             image_ext=self.image_ext,
             is_thumbnail=self.is_thumbnail,
             on_log=self.handle_log,
+            task_id=self.task_id,
         )
         self.save_history()
 
@@ -294,8 +302,6 @@ class DownloadCard(ft.Container):
         self.log_text += f"[{time.strftime('%H:%M:%S')}] Download paused by user.\n"
         self.update_actions()
         self.save_history()
-        if self.on_state_change:
-            self.on_state_change(self)
         self.show_snack("Download paused", AppTheme.ACCENT)
         if self.on_state_change:
             self.on_state_change(self)
@@ -307,8 +313,6 @@ class DownloadCard(ft.Container):
         self.log_text += f"[{time.strftime('%H:%M:%S')}] Download resumed.\n"
         self.update_actions()
         self.start_task()
-        if self.on_state_change:
-            self.on_state_change(self)
         self.save_history()
         self.show_snack("Resuming download...", AppTheme.SUCCESS)
         if self.on_state_change:
@@ -323,8 +327,6 @@ class DownloadCard(ft.Container):
         self.log_text += f"[{time.strftime('%H:%M:%S')}] Download stopped by user.\n"
         self.update_actions()
         self.save_history()
-        if self.on_state_change:
-            self.on_state_change(self)
         self.show_snack("Download stopped", AppTheme.ERROR)
         if self.on_state_change:
             self.on_state_change(self)
@@ -491,7 +493,14 @@ class DownloadCard(ft.Container):
                 else:
                     self.status_text.value = f"Downloading ({downloaded_mb:.1f}MB)"
         else:
-            self.status_text.value = "Converting" if status == 'processing' else status.capitalize()
+            if status == 'processing':
+                pct = d.get('percent', 0)
+                if pct and pct > 0:
+                    self.status_text.value = f"Converting ({pct:.1f}%)"
+                else:
+                    self.status_text.value = "Converting"
+            else:
+                self.status_text.value = status.capitalize()
 
         eta_str = d.get('eta', 'N/A')
         self.speed_text.value = f"{d['speed']}" + (f" - ETA: {eta_str}" if eta_str and eta_str != 'N/A' else "")

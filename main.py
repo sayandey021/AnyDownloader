@@ -1,6 +1,27 @@
-import flet as ft
 import sys
 import os
+import subprocess
+
+def _ensure_dependencies():
+    if getattr(sys, 'frozen', False):
+        return
+    req_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'requirements.txt'))
+    if not os.path.exists(req_file):
+        return
+    try:
+        import flet, PIL, pystray, yt_dlp, spotdl, requests, bs4, curl_cffi
+    except ImportError:
+        print("Missing dependencies detected! Installing automatically...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_file], check=True)
+            print("Dependencies installed successfully! Restarting...")
+            os.execl(sys.executable, sys.executable, *sys.argv)
+        except Exception as e:
+            print(f"Failed to install dependencies: {e}")
+
+_ensure_dependencies()
+
+import flet as ft
 import threading
 from PIL import Image
 import pystray
@@ -324,9 +345,36 @@ def main(page: ft.Page):
         def download_task():
             try:
                 download_ffmpeg(update_progress)
+                
+                def exit_app(e):
+                    force_exit_app()
+                    
+                restart_btn = ft.ElevatedButton(
+                    "Exit Application",
+                    icon=ft.Icons.EXIT_TO_APP_ROUNDED,
+                    bgcolor=AppTheme.PRIMARY,
+                    color=ft.Colors.WHITE,
+                    on_click=exit_app,
+                    height=45
+                )
+                
                 page.controls.clear()
-                main_view = MainView(page)
-                page.add(main_view)
+                restart_view = ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED, color=AppTheme.SUCCESS, size=64),
+                            ft.Text("Setup Complete!", size=28, weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY),
+                            ft.Text("FFmpeg has been installed successfully.\nPlease manually restart the application to apply the changes.", 
+                                    text_align=ft.TextAlign.CENTER, color=AppTheme.TEXT_SECONDARY, size=16),
+                            ft.Container(height=20),
+                            restart_btn
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                    expand=True,
+                )
+                page.add(restart_view)
                 page.update()
             except Exception as e:
                 status_text.value = f"Failed to download FFmpeg: {e}\nPlease restart the app or install FFmpeg manually."
