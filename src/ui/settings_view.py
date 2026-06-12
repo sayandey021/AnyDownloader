@@ -113,8 +113,13 @@ class SettingsView(ft.Container):
             border_radius=10,
             options=[
                 ft.dropdown.Option(key="best", text="Best Quality (Video + Audio)"),
+                ft.dropdown.Option(key="bestvideo[height<=1920]+bestaudio/best", text="1920p"),
+                ft.dropdown.Option(key="bestvideo[height<=1800]+bestaudio/best", text="1800p"),
+                ft.dropdown.Option(key="bestvideo[height<=1280]+bestaudio/best", text="1280p"),
                 ft.dropdown.Option(key="bestvideo[height<=1080]+bestaudio/best", text="1080p"),
                 ft.dropdown.Option(key="bestvideo[height<=720]+bestaudio/best", text="720p"),
+                ft.dropdown.Option(key="bestvideo[height<=640]+bestaudio/best", text="640p"),
+                ft.dropdown.Option(key="bestvideo[height<=540]+bestaudio/best", text="540p"),
                 ft.dropdown.Option(key="bestvideo[height<=480]+bestaudio/best", text="480p"),
                 ft.dropdown.Option(key="bestaudio/best", text="Audio Only"),
             ],
@@ -267,6 +272,25 @@ class SettingsView(ft.Container):
             input_filter=ft.NumbersOnlyInputFilter(),
         )
 
+        self.auto_delete_history_dropdown = ft.Dropdown(
+            label="Auto Delete History",
+            width=280,
+            value=str(self.settings.get('auto_delete_history_days', 0)),
+            border_color=AppTheme.SURFACE_VARIANT,
+            focused_border_color=AppTheme.PRIMARY,
+            color=AppTheme.TEXT_PRIMARY,
+            bgcolor=AppTheme.SURFACE,
+            border_radius=10,
+            options=[
+                ft.dropdown.Option(key="0", text="Never"),
+                ft.dropdown.Option(key="1", text="Older than 1 day"),
+                ft.dropdown.Option(key="3", text="Older than 3 days"),
+                ft.dropdown.Option(key="7", text="Older than 7 days"),
+                ft.dropdown.Option(key="30", text="Older than 30 days"),
+            ],
+            tooltip="Automatically delete download and search history older than the selected time"
+        )
+
         self.embed_thumbnail_switch = ft.Switch(
             label="Embed Thumbnail in File",
             value=self.settings.get('embed_thumbnail'),
@@ -394,7 +418,7 @@ class SettingsView(ft.Container):
             [
                 ft.Row([self.ask_on_close_switch], spacing=20, wrap=True),
                 ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
-                self.speed_limit_field,
+                ft.Row([self.speed_limit_field, self.auto_delete_history_dropdown], spacing=20, wrap=True),
                 ft.Row([self.embed_thumbnail_switch, self.embed_subs_switch, self.embed_metadata_switch], spacing=30, wrap=True),
                 self.sub_lang_field,
                 ft.Row([self.browser_cookies_dropdown], spacing=10),
@@ -693,7 +717,8 @@ class SettingsView(ft.Container):
             self.playlist_folder_switch, self.audio_codec_dropdown,
             self.audio_quality_dropdown, self.ask_on_close_switch,
             self.embed_thumbnail_switch, self.embed_metadata_switch,
-            self.embed_subs_switch, self.browser_cookies_dropdown
+            self.embed_subs_switch, self.browser_cookies_dropdown,
+            self.auto_delete_history_dropdown
         ]
         for control in auto_save_controls_change:
             if isinstance(control, ft.Dropdown):

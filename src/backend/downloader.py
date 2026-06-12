@@ -8,6 +8,40 @@ import tempfile
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import time
+
+_original_os_replace = os.replace
+_original_os_rename = os.rename
+
+def _patched_os_replace(src, dst, *args, **kwargs):
+    if src == dst:
+        return
+    for _ in range(30):
+        try:
+            return _original_os_replace(src, dst, *args, **kwargs)
+        except OSError as e:
+            if getattr(e, 'winerror', None) == 32:
+                time.sleep(0.1)
+                continue
+            raise
+    return _original_os_replace(src, dst, *args, **kwargs)
+
+def _patched_os_rename(src, dst, *args, **kwargs):
+    if src == dst:
+        return
+    for _ in range(30):
+        try:
+            return _original_os_rename(src, dst, *args, **kwargs)
+        except OSError as e:
+            if getattr(e, 'winerror', None) == 32:
+                time.sleep(0.1)
+                continue
+            raise
+    return _original_os_rename(src, dst, *args, **kwargs)
+
+os.replace = _patched_os_replace
+os.rename = _patched_os_rename
+
 thread_local = threading.local()
 
 # Patch yt_dlp Popen to capture FFmpeg progress
@@ -29,6 +63,61 @@ def _is_ffmpeg_conversion(args_list):
         return exe_basename in ('ffmpeg', 'ffmpeg.exe') and 'ffprobe' not in exe_basename
     except Exception:
         return False
+
+# Fix for WinError 2 in yt-dlp when thumbnail file is missing
+from yt_dlp.postprocessor.ffmpeg import FFmpegThumbnailsConvertorPP
+_original_thumbnail_run = FFmpegThumbnailsConvertorPP.run
+
+def _patched_thumbnail_run(self, info):
+    thumbnails = info.get('thumbnails')
+    if thumbnails:
+        valid_thumbnails = []
+        for t in thumbnails:
+            filepath = t.get('filepath')
+            if filepath and os.path.exists(filepath):
+                # Fix mismatched extension for images (e.g. JPG data inside .png file)
+                try:
+                    with open(filepath, 'rb') as f:
+                        header = f.read(12)
+                    real_ext = None
+                    if header.startswith(b'\xff\xd8\xff'):
+                        real_ext = '.jpg'
+                    elif header.startswith(b'\x89PNG\r\n\x1a\n'):
+                        real_ext = '.png'
+                    elif header.startswith(b'GIF87a') or header.startswith(b'GIF89a'):
+                        real_ext = '.gif'
+                    elif header[0:4] == b'RIFF' and header[8:12] == b'WEBP':
+                        real_ext = '.webp'
+                        
+                    if real_ext:
+                        current_ext = os.path.splitext(filepath)[1].lower()
+                        if current_ext == '.jpeg': current_ext = '.jpg'
+                        
+                        if real_ext != current_ext:
+                            new_filepath = os.path.splitext(filepath)[0] + real_ext
+                            import shutil
+                            shutil.move(filepath, new_filepath)
+                            t['filepath'] = new_filepath
+                            try: self.write_debug(f"Fixed mismatched thumbnail extension: {filepath} -> {new_filepath}")
+                            except: pass
+                except Exception as e:
+                    try: self.write_debug(f"Error checking thumbnail header: {e}")
+                    except: pass
+                    
+                valid_thumbnails.append(t)
+            else:
+                try: self.write_debug(f"Missing thumbnail removed to prevent WinError 2: {filepath}")
+                except: pass
+        info['thumbnails'] = valid_thumbnails
+        
+    try:
+        return _original_thumbnail_run(self, info)
+    except Exception as e:
+        try: self.write_debug(f"FFmpegThumbnailsConvertorPP failed but continuing to prevent crash: {e}")
+        except: pass
+        return [], info
+
+FFmpegThumbnailsConvertorPP.run = _patched_thumbnail_run
 
 def patched_init(self, *args, **kwargs):
     if args and len(args) > 0 and isinstance(args[0], list):
@@ -354,6 +443,50 @@ class DownloaderBackend:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 
+                if info and 'linkedin.com' in url.lower():
+                    try:
+                        import requests
+                        from bs4 import BeautifulSoup
+                        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}, timeout=10)
+                        if resp.status_code == 200:
+                            soup = BeautifulSoup(resp.text, 'html.parser')
+                            video_tag = soup.find('video')
+                            if video_tag:
+                                if video_tag.get('data-poster-url'):
+                                    src = video_tag.get('data-poster-url')
+                                    info['thumbnail'] = src
+                                    if 'thumbnails' in info:
+                                        info['thumbnails'] = [{'url': src}]
+                                
+                                if not info.get('duration'):
+                                    import json
+                                    sources_str = video_tag.get('data-sources')
+                                    if sources_str:
+                                        try:
+                                            sources = json.loads(sources_str)
+                                            if sources and isinstance(sources, list):
+                                                for src_info in sources:
+                                                    v_url = src_info.get('src')
+                                                    v_bitrate = src_info.get('data-bitrate')
+                                                    if v_url and v_bitrate:
+                                                        head_r = requests.head(v_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+                                                        if head_r.status_code == 200 and 'Content-Length' in head_r.headers:
+                                                            c_len = int(head_r.headers['Content-Length'])
+                                                            info['duration'] = (c_len * 8) / v_bitrate
+                                                            break
+                                        except:
+                                            pass
+                            else:
+                                for img in soup.find_all('img'):
+                                    src = img.get('src', '')
+                                    if 'media.licdn.com' in src and ('image-scale' in src or 'cover' in src.lower()):
+                                        info['thumbnail'] = src
+                                        if 'thumbnails' in info:
+                                            info['thumbnails'] = [{'url': src}]
+                                        break
+                    except Exception:
+                        pass
+                        
                 # Pre-download thumbnail for kick.com or twitch (0x0 fixes)
                 if info and info.get('thumbnail'):
                     thumb_url = info['thumbnail']
@@ -368,6 +501,12 @@ class DownloaderBackend:
                             from curl_cffi import requests as cffi_requests
                             import base64
                             resp = cffi_requests.get(thumb_url, impersonate="chrome", timeout=10)
+                            if resp.status_code == 200:
+                                b64_data = base64.b64encode(resp.content).decode('utf-8')
+                        elif 'bcbits.com' in thumb_url or 'bandcamp' in url.lower():
+                            import requests
+                            import base64
+                            resp = requests.get(thumb_url, timeout=10)
                             if resp.status_code == 200:
                                 b64_data = base64.b64encode(resp.content).decode('utf-8')
                         elif 'static-cdn.jtvnw.net' in thumb_url and '0x0' in thumb_url:
@@ -416,7 +555,7 @@ class DownloaderBackend:
                     pass
                     
                 # If out is None or contains "login page", try with cookies
-                if not out or '"HTTP redirect to login page' in out or '"error":' in out:
+                if not out or '"HTTP redirect to login page' in out or '"error":' in out or 'blocked by network security' in out:
                     for browser in ['chrome', 'edge', 'firefox', 'brave']:
                         try:
                             out = subprocess.check_output(
@@ -424,14 +563,18 @@ class DownloaderBackend:
                                 stderr=subprocess.DEVNULL,
                                 text=True
                             )
-                            if '"HTTP redirect to login page' not in out and '"error":' not in out:
+                            if '"HTTP redirect to login page' not in out and '"error":' not in out and 'blocked by network security' not in out:
                                 break
                         except:
                             pass
                 
-                if not out or '"HTTP redirect to login page' in out or '"error":' in out:
+                if not out or '"HTTP redirect to login page' in out or '"error":' in out or 'blocked by network security' in out:
                     if 'instagram.com' in url:
                         raise Exception("Instagram blocks multi-image posts without cookies. Go to Settings and click 'Login to Browser (Export Cookies)' to link your account.")
+                    if 'reddit.com' in url and 'blocked by network security' in out:
+                        raise Exception("Reddit is blocking the request. To fix this, go to Settings -> Advanced and select your browser in the 'Browser Cookies' dropdown, or use a cookies.txt file.")
+                    if 'tumblr.com' in url:
+                        raise Exception("Tumblr is blocking the request. To fix this, go to Settings -> Advanced and select your browser in the 'Browser Cookies' dropdown, or use a cookies.txt file.")
                     return None
                 
                 # gallery-dl outputs JSON arrays. There might be multiple arrays separated by newlines.
@@ -460,14 +603,18 @@ class DownloaderBackend:
                 entries = []
                 last_metadata = {}
                 for item in data:
-                    if isinstance(item, list) and len(item) == 2:
-                        status, info_dict = item
+                    if isinstance(item, list) and len(item) >= 2:
+                        status = item[0]
+                        info_dict = item[1]
                         
                         if status == 2 and isinstance(info_dict, dict):
                             last_metadata = info_dict
                             
-                        if status != -1:
-                            img_url = None
+                        img_url = None
+                        if status == 3 and len(item) >= 3 and isinstance(item[1], str):
+                            img_url = item[1]
+                            info_dict = item[2] if isinstance(item[2], dict) else last_metadata
+                        elif status != -1:
                             if isinstance(info_dict, dict):
                                 img_url = info_dict.get('url') or info_dict.get('file_url')
                                 if not img_url and 'images' in info_dict and isinstance(info_dict['images'], dict):
@@ -480,27 +627,27 @@ class DownloaderBackend:
                                 img_url = info_dict
                                 info_dict = last_metadata # Use previous metadata for title/id
                                 
-                            if img_url:
-                                ext = img_url.split('.')[-1][:4].lower() if '.' in img_url else 'jpg'
-                                if '?' in ext: ext = ext.split('?')[0]
-                                if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
-                                    ext = 'jpg'
-                                
-                                title = str(info_dict.get('title', info_dict.get('description', 'Image'))).strip() or "Image"
-                                # Append unique index/id to title to prevent overwriting
-                                img_id = str(info_dict.get('id', info_dict.get('tweet_id', str(len(entries)+1))))
-                                title = f"{title}_{img_id}"
-                                
-                                entry = {
-                                    '_type': 'video', # Fake as video to satisfy UI
-                                    'id': img_id,
-                                    'title': title,
-                                    'url': img_url,
-                                    'thumbnail': img_url,
-                                    'duration': 0,
-                                    'formats': [{'url': img_url, 'ext': ext, 'vcodec': 'image', 'acodec': 'none'}],
-                                }
-                                entries.append(entry)
+                        if img_url:
+                            ext = img_url.split('.')[-1][:4].lower() if '.' in img_url else 'jpg'
+                            if '?' in ext: ext = ext.split('?')[0]
+                            if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
+                                ext = 'jpg'
+                            
+                            title = str(info_dict.get('title', info_dict.get('description', 'Image'))).strip() or "Image"
+                            # Append unique index/id to title to prevent overwriting
+                            img_id = str(info_dict.get('id', info_dict.get('tweet_id', str(len(entries)+1))))
+                            title = f"{title}_{img_id}"
+                            
+                            entry = {
+                                '_type': 'video', # Fake as video to satisfy UI
+                                'id': img_id,
+                                'title': title,
+                                'url': img_url,
+                                'thumbnail': img_url,
+                                'duration': 0,
+                                'formats': [{'url': img_url, 'ext': ext, 'vcodec': 'image', 'acodec': 'none'}],
+                            }
+                            entries.append(entry)
                 
                 if entries:
                     if len(entries) == 1:
@@ -1105,7 +1252,9 @@ class DownloaderBackend:
             sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scratch', 'SpotiFLAC'))
             from SpotiFLAC.providers.tidal_metadata import TidalMetadataClient
             client = TidalMetadataClient()
-            collection_name, tracks = client.get_url(url)
+            result = client.get_url(url)
+            collection_name = result[0]
+            tracks = result[1]
             if not tracks:
                 return None
             
@@ -1116,10 +1265,10 @@ class DownloaderBackend:
                     "title": t.title,
                     "uploader": t.artists,
                     "thumbnail": t.cover_url,
-                    "duration": getattr(t, 'duration', 0),
+                    "duration": getattr(t, 'duration_seconds', 0),
                     "is_audio_only": True,
                     "webpage_url": url,
-                    "is_spotify": True
+                    "_spotify": True
                 }
             
             entries = []
@@ -1129,19 +1278,19 @@ class DownloaderBackend:
                     "title": t.title,
                     "uploader": t.artists,
                     "thumbnail": t.cover_url,
-                    "duration": getattr(t, 'duration', 0),
+                    "duration": getattr(t, 'duration_seconds', 0),
                     "url": getattr(t, 'url', url),
                     "is_audio_only": True
                 })
                 
             return {
-                "type": "playlist",
+                "_type": "playlist",
                 "title": collection_name,
                 "uploader": entries[0]["uploader"] if entries else "Tidal",
                 "thumbnail": entries[0]["thumbnail"] if entries else None,
                 "entries": entries,
                 "webpage_url": url,
-                "is_spotify": True
+                "_spotify": True
             }
         except Exception as e:
             print(f"[TIDAL] Error fetching info: {e}")
@@ -1731,6 +1880,7 @@ class DownloaderBackend:
                 'no_warnings': False,
                 'noplaylist': True,
                 'ffmpeg_location': get_ffmpeg_path(),
+                'file_access_retries': 30,
                 'js_runtimes': {
                     'node': {},
                     'deno': {},
@@ -1774,29 +1924,6 @@ class DownloaderBackend:
                     'preferredquality': final_audio_quality,
                 })
 
-            # Embed thumbnail — per-download override takes priority over settings
-            should_embed_thumb = embed_thumbnail if embed_thumbnail is not None else (
-                settings.get('embed_thumbnail', False) if settings else False
-            )
-            
-            # Disable thumbnail embedding for WAV since ffmpeg doesn't support it
-            if should_embed_thumb and is_audio and final_audio_codec == 'wav':
-                should_embed_thumb = False
-                
-            if should_embed_thumb:
-                ydl_opts['writethumbnail'] = True
-                if not is_audio:
-                    # Only force MKV for formats that don't support thumbnail embedding (webm)
-                    # MP4, MKV, etc. natively support embedded thumbnails
-                    current_format = ydl_opts.get('merge_output_format', video_ext or '').lower()
-                    if current_format in ('webm', '') or not current_format:
-                        ydl_opts['merge_output_format'] = 'mkv'
-                        postprocessors.append({
-                            'key': 'FFmpegVideoConvertor',
-                            'preferedformat': 'mkv',
-                        })
-                postprocessors.append({'key': 'EmbedThumbnail'})
-
             # Embed subtitles — per-download override takes priority over settings
             should_embed_subs = embed_subtitles if embed_subtitles is not None else (
                 settings.get('embed_subtitles', False) if settings else False
@@ -1830,12 +1957,88 @@ class DownloaderBackend:
                 if info and info.get('playlist_index'):
                     ydl_opts['postprocessor_args']['ffmpeg'].extend(['-metadata', f'track={info["playlist_index"]}'])
 
+            # Embed thumbnail — must be AFTER metadata so ffmpeg doesn't strip the mutagen thumbnail
+            should_embed_thumb = embed_thumbnail if embed_thumbnail is not None else (
+                settings.get('embed_thumbnail', False) if settings else False
+            )
+            
+            # Disable thumbnail embedding for WAV since ffmpeg doesn't support it
+            if should_embed_thumb and is_audio and final_audio_codec == 'wav':
+                should_embed_thumb = False
+                
+            if should_embed_thumb:
+                ydl_opts['writethumbnail'] = True
+                if not is_audio:
+                    # Only force MKV for formats that don't support thumbnail embedding (webm)
+                    # MP4, MKV, etc. natively support embedded thumbnails
+                    current_format = ydl_opts.get('merge_output_format', video_ext or '').lower()
+                    if current_format in ('webm', '') or not current_format:
+                        ydl_opts['merge_output_format'] = 'mkv'
+                        postprocessors.append({
+                            'key': 'FFmpegVideoConvertor',
+                            'preferedformat': 'mkv',
+                        })
+                postprocessors.append({
+                    'key': 'FFmpegThumbnailsConvertor',
+                    'format': 'jpg',
+                })
+                postprocessors.append({'key': 'EmbedThumbnail'})
+
             if postprocessors:
                 ydl_opts['postprocessors'] = postprocessors
 
             try:
                 try:
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        def _auto_rename_filter(info_dict, *args, **kwargs):
+                            if info and info.get('thumbnail') and 'linkedin.com' in url.lower():
+                                info_dict['thumbnail'] = info['thumbnail']
+                                info_dict['thumbnails'] = [{'url': info['thumbnail'], 'id': 'custom'}]
+                            original_title = info_dict.get('title')
+                            if not original_title:
+                                return None
+                            target_ext = info_dict.get('ext')
+                            if is_audio:
+                                target_ext = final_audio_codec
+                                # Windows File Explorer requires an album tag to display m4a thumbnails
+                                if target_ext == 'm4a' and not info_dict.get('album'):
+                                    info_dict['album'] = original_title or 'Unknown Album'
+                            elif video_ext:
+                                target_ext = ydl.params.get('merge_output_format') or video_ext
+                                
+                            for i in range(1, 1000):
+                                temp_info = info_dict.copy()
+                                if target_ext:
+                                    temp_info['ext'] = target_ext
+                                if i > 1:
+                                    temp_info['title'] = f"{original_title} ({i})"
+                                
+                                final_path = ydl.prepare_filename(temp_info)
+                                if not os.path.exists(final_path):
+                                    if i > 1:
+                                        info_dict['title'] = temp_info['title']
+                                    break
+                                    
+                            try:
+                                if on_log:
+                                    d_type = "Audio" if is_audio else "Video"
+                                    if is_audio:
+                                        q = f"{audio_quality}kbps" if audio_quality else "best"
+                                    else:
+                                        q = info_dict.get('resolution') or info_dict.get('format_note') or "best"
+                                    file_name = os.path.basename(final_path)
+                                    on_log(f"--- Download Info ---")
+                                    on_log(f"Type: {d_type}")
+                                    on_log(f"Format: {target_ext}")
+                                    on_log(f"Quality: {q}")
+                                    on_log(f"File Name: {file_name}")
+                                    on_log(f"Location: {final_path}")
+                                    on_log(f"---------------------")
+                            except Exception: pass
+                            
+                            return None
+                            
+                        ydl.params['match_filter'] = _auto_rename_filter
                         error_code = ydl.download([url])
                 except Exception as e:
                     yt_err_str = str(e).lower()
@@ -1903,10 +2106,14 @@ class DownloaderBackend:
             track_name = None
             artist = None
             duration_s = None
+            original_thumbnail_url = None
+            album_name = None
             if info:
                 track_name = info.get('track') or info.get('fulltitle') or info.get('title')
                 artist = info.get('artist') or info.get('uploader') or info.get('creator', '')
                 duration_s = info.get('duration')
+                original_thumbnail_url = info.get('thumbnail') or (info.get('thumbnails', [{}])[0].get('url') if info.get('thumbnails') else None)
+                album_name = info.get('album')
             
             if not track_name or not artist:
                 # Fallback: fetch metadata from Spotify/Apple Music
@@ -1918,6 +2125,8 @@ class DownloaderBackend:
                             track_name = data.get('name', '')
                             artist = ', '.join(a['name'] for a in data.get('artists', []))
                             duration_s = (data.get('duration_ms', 0) / 1000) if data.get('duration_ms') else None
+                            if data.get('album') and data['album'].get('images'): original_thumbnail_url = data['album']['images'][0]['url']
+                            if data.get('album'): album_name = data['album'].get('name')
                 elif self.is_applemusic_url(url):
                     apple_info = self._get_applemusic_info(url)
                     if apple_info:
@@ -1925,14 +2134,18 @@ class DownloaderBackend:
                             apple_info = apple_info.get('entries', [{}])[0]
                         track_name = apple_info.get('track') or apple_info.get('fulltitle') or apple_info.get('title')
                         artist = apple_info.get('artist') or apple_info.get('uploader', '')
+                        if apple_info.get('thumbnail'): original_thumbnail_url = apple_info.get('thumbnail')
+                        if apple_info.get('album'): album_name = apple_info.get('album')
                 elif self.is_tidal_url(url):
                     tidal_info = self._get_tidal_info(url)
                     if tidal_info:
-                        if tidal_info.get('type') == 'playlist':
+                        if tidal_info.get('_type') == 'playlist' or tidal_info.get('type') == 'playlist':
                             tidal_info = tidal_info.get('entries', [{}])[0]
                         track_name = tidal_info.get('title')
                         artist = tidal_info.get('uploader')
                         duration_s = tidal_info.get('duration')
+                        if tidal_info.get('thumbnail'): original_thumbnail_url = tidal_info.get('thumbnail')
+                        if tidal_info.get('album'): album_name = tidal_info.get('album')
                 elif self.is_deezer_url(url):
                     deezer_info = self._get_deezer_info(url)
                     if deezer_info:
@@ -1941,6 +2154,8 @@ class DownloaderBackend:
                         track_name = deezer_info.get('title')
                         artist = deezer_info.get('uploader')
                         duration_s = deezer_info.get('duration')
+                        if deezer_info.get('thumbnail'): original_thumbnail_url = deezer_info.get('thumbnail')
+                        if deezer_info.get('album'): album_name = deezer_info.get('album')
 
             if not track_name:
                 if on_error:
@@ -2084,6 +2299,7 @@ class DownloaderBackend:
                 'nocheckcertificate': True,
                 'noplaylist': True,
                 'ffmpeg_location': get_ffmpeg_path(),
+                'file_access_retries': 30,
                 'js_runtimes': {
                     'node': {},
                     'deno': {},
@@ -2119,6 +2335,16 @@ class DownloaderBackend:
                 'preferredquality': bitrate,
             })
 
+            # Embed metadata
+            should_embed_metadata = settings.get('embed_metadata', True) if settings else True
+            if should_embed_metadata:
+                postprocessors.append({'key': 'FFmpegMetadata', 'add_metadata': True})
+                ydl_opts.setdefault('postprocessor_args', {})
+                if 'ffmpeg' not in ydl_opts['postprocessor_args']:
+                    ydl_opts['postprocessor_args']['ffmpeg'] = []
+                if fmt == 'mp3':
+                    ydl_opts['postprocessor_args']['ffmpeg'].extend(['-id3v2_version', '3'])
+
             # Embed thumbnail
             should_embed_thumb = embed_thumbnail if embed_thumbnail is not None else (
                 settings.get('embed_thumbnail', False) if settings else False
@@ -2130,12 +2356,66 @@ class DownloaderBackend:
                 
             if should_embed_thumb:
                 ydl_opts['writethumbnail'] = True
+                postprocessors.append({
+                    'key': 'FFmpegThumbnailsConvertor',
+                    'format': 'jpg',
+                })
                 postprocessors.append({'key': 'EmbedThumbnail'})
 
             ydl_opts['postprocessors'] = postprocessors
 
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    def _auto_rename_filter(info_dict, *args, **kwargs):
+                        if original_thumbnail_url:
+                            info_dict['thumbnails'] = [{'url': original_thumbnail_url, 'id': 'custom_original'}]
+                            info_dict['thumbnail'] = original_thumbnail_url
+                        if track_name:
+                            info_dict['title'] = track_name
+                        if artist:
+                            info_dict['artist'] = artist
+                            info_dict['uploader'] = artist
+                            info_dict['creator'] = artist
+                        if album_name:
+                            info_dict['album'] = album_name
+                            
+                        original_title = info_dict.get('title')
+                        if not original_title:
+                            return None
+                        target_ext = fmt
+                        # Windows File Explorer requires an album tag to display m4a thumbnails
+                        if target_ext == 'm4a' and not info_dict.get('album'):
+                            info_dict['album'] = original_title or 'Unknown Album'
+                            
+                        for i in range(1, 1000):
+                            temp_info = info_dict.copy()
+                            if target_ext:
+                                temp_info['ext'] = target_ext
+                            if i > 1:
+                                temp_info['title'] = f"{original_title} ({i})"
+                            
+                            final_path = ydl.prepare_filename(temp_info)
+                            if not os.path.exists(final_path):
+                                if i > 1:
+                                    info_dict['title'] = temp_info['title']
+                                break
+                                
+                        try:
+                            if on_log:
+                                q = f"{bitrate}kbps" if bitrate else "best"
+                                file_name = os.path.basename(final_path)
+                                on_log(f"--- Download Info ---")
+                                on_log(f"Type: Audio")
+                                on_log(f"Format: {target_ext}")
+                                on_log(f"Quality: {q}")
+                                on_log(f"File Name: {file_name}")
+                                on_log(f"Location: {final_path}")
+                                on_log(f"---------------------")
+                        except Exception: pass
+                        
+                        return None
+                        
+                    ydl.params['match_filter'] = _auto_rename_filter
                     ydl.download([yt_url])
             except Exception as e:
                 yt_err_str = str(e).lower()

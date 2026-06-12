@@ -22,7 +22,8 @@ class FetchDialog(ft.AlertDialog):
         self.inset_padding = ft.Padding(left=20, right=20, top=20, bottom=20)
         
         # Force audio-only for Spotify content
-        self.is_audio_platform = self.info.get('_spotify') or self.info.get('extractor_key', '').lower() in ['spotify', 'soundcloud', 'applemusic', 'deezer', 'tidal', 'gaana', 'lastfm']
+        extractor_key = self.info.get('extractor_key', '').lower()
+        self.is_audio_platform = self.info.get('_spotify') or extractor_key in ['spotify', 'soundcloud', 'applemusic', 'deezer', 'tidal', 'gaana', 'lastfm', 'mixcloud'] or 'bandcamp' in extractor_key or 'jiosaavn' in extractor_key
         if self.is_audio_platform:
             self.audio_only_mode = True
 
@@ -31,20 +32,53 @@ class FetchDialog(ft.AlertDialog):
         
         # Detect image
         self.is_image = False
-        if self.is_playlist:
+        if self.is_audio_platform:
+            pass
+        elif self.is_playlist:
             if self.info.get('id') == 'gallery':
                 self.is_image = True
             else:
                 entries = self.info.get('entries', [])
                 if entries:
-                    first_formats = entries[0].get('formats', [])
-                    if first_formats and all(f.get('vcodec') == 'image' for f in first_formats):
+                    all_images = True
+                    checked_any = False
+                    for entry in entries:
+                        entry_formats = entry.get('formats', [])
+                        if not entry_formats:
+                            continue
+                        checked_any = True
+                        for f in entry_formats:
+                            ext = f.get('ext', '').lower()
+                            if ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv']:
+                                all_images = False
+                                break
+                            vcodec = f.get('vcodec')
+                            if vcodec and vcodec not in ['image', 'none']:
+                                all_images = False
+                                break
+                        if not all_images:
+                            break
+                    if all_images and checked_any:
                         self.is_image = True
         else:
             formats = self.info.get('formats', [])
-            if formats and all(f.get('vcodec') == 'image' for f in formats):
-                self.is_image = True
-                
+            if formats:
+                all_images = True
+                for f in formats:
+                    # yt-dlp sometimes mislabels tumblr mp4 videos as vcodec='image'
+                    ext = f.get('ext', '').lower()
+                    if ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv']:
+                        all_images = False
+                        break
+                    
+                    vcodec = f.get('vcodec')
+                    # If the codec is explicitly a video codec, it's not an image
+                    if vcodec and vcodec not in ['image', 'none']:
+                        all_images = False
+                        break
+                        
+                if all_images:
+                    self.is_image = True
         # Detect livestream
         self.is_live = self.info.get('is_live') or self.info.get('live_status') == 'is_live'
         
@@ -163,7 +197,8 @@ class FetchDialog(ft.AlertDialog):
         vid_h = self.info.get('height')
         
         # Audio platforms usually have 1:1 square cover art
-        is_audio_platform = self.info.get('_spotify') or self.info.get('extractor_key', '').lower() in ['spotify', 'soundcloud', 'applemusic', 'deezer', 'tidal', 'gaana', 'lastfm']
+        extractor_key = self.info.get('extractor_key', '').lower()
+        is_audio_platform = self.info.get('_spotify') or extractor_key in ['spotify', 'soundcloud', 'applemusic', 'deezer', 'tidal', 'gaana', 'lastfm', 'mixcloud'] or 'bandcamp' in extractor_key
 
         if vid_w and vid_h and vid_w > 0 and vid_h > 0:
             aspect = vid_w / vid_h
@@ -665,7 +700,7 @@ class FetchDialog(ft.AlertDialog):
         for f in formats:
             h = f.get('height')
             vcodec = f.get('vcodec')
-            if not h or not vcodec or vcodec == 'none':
+            if not h or vcodec == 'none':
                 continue
             size = f.get('filesize') or f.get('filesize_approx') or 0
             if not size:
@@ -678,7 +713,7 @@ class FetchDialog(ft.AlertDialog):
                 size_map[h] = size
         return size_map
 
-    def _get_approx_size(self, is_audio=False, quality="best"):
+    def _get_approx_size(self, is_audio=False, quality="best", audio_format="mp3"):
         """Return a human-readable approximate file size string."""
         total_size_bytes = 0
         
@@ -689,16 +724,16 @@ class FetchDialog(ft.AlertDialog):
                 entries_to_calc = [entry for cb, entry, _ in self.playlist_checkboxes if cb.value]
             
             for entry in entries_to_calc:
-                total_size_bytes += self._calc_single_approx_size(entry, is_audio, quality, use_format_sizes=False)
+                total_size_bytes += self._calc_single_approx_size(entry, is_audio, quality, use_format_sizes=False, audio_format=audio_format)
         else:
-            total_size_bytes = self._calc_single_approx_size(self.info, is_audio, quality, use_format_sizes=True)
+            total_size_bytes = self._calc_single_approx_size(self.info, is_audio, quality, use_format_sizes=True, audio_format=audio_format)
 
         if not total_size_bytes:
             return ""
         
         return self._format_bytes(total_size_bytes)
 
-    def _calc_single_approx_size(self, info_dict, is_audio, quality, use_format_sizes=False):
+    def _calc_single_approx_size(self, info_dict, is_audio, quality, use_format_sizes=False, audio_format="mp3"):
         size_bytes = 0
         duration = info_dict.get('duration', 0)
         
@@ -707,10 +742,15 @@ class FetchDialog(ft.AlertDialog):
             duration = 180
 
         if is_audio:
-            try:
-                bitrate_kbps = int(quality) if quality != "best" else 192
-            except (ValueError, TypeError):
-                bitrate_kbps = 192
+            if audio_format == "wav":
+                bitrate_kbps = 1411
+            elif audio_format == "flac":
+                bitrate_kbps = 900
+            else:
+                try:
+                    bitrate_kbps = int(quality) if quality != "best" else 192
+                except (ValueError, TypeError):
+                    bitrate_kbps = 192
             if duration:
                 size_bytes = int(bitrate_kbps * 1000 / 8 * duration)
         else:
@@ -788,7 +828,27 @@ class FetchDialog(ft.AlertDialog):
     def _on_format_change(self, e):
         if hasattr(e, 'data') and e.data:
             self.format_dropdown.value = e.data
+        fmt = self.format_dropdown.value
+        if hasattr(self, 'quality_dropdown'):
+            if fmt in ("wav", "flac"):
+                self.quality_dropdown.options = [
+                    ft.dropdown.Option("best", text="Lossless"),
+                ]
+                self.quality_dropdown.value = "best"
+                self.quality_dropdown.disabled = True
+            else:
+                self.quality_dropdown.options = [
+                    ft.dropdown.Option("320", text="320 kbps (Highest)"),
+                    ft.dropdown.Option("256", text="256 kbps (High)"),
+                    ft.dropdown.Option("192", text="192 kbps (Standard)"),
+                    ft.dropdown.Option("128", text="128 kbps (Low)"),
+                    ft.dropdown.Option("96", text="96 kbps (Lowest)"),
+                ]
+                if self.quality_dropdown.value == "best":
+                    self.quality_dropdown.value = "192"
+                self.quality_dropdown.disabled = False
         self._update_embed_options()
+        self._update_filesize()
         self._page.update()
 
     def _update_embed_options(self):
@@ -856,6 +916,7 @@ class FetchDialog(ft.AlertDialog):
                     ft.dropdown.Option("jpg"),
                     ft.dropdown.Option("png"),
                     ft.dropdown.Option("webp"),
+                    ft.dropdown.Option("gif"),
                 ],
                 **dd_style,
             )
@@ -884,13 +945,32 @@ class FetchDialog(ft.AlertDialog):
             qual_opts = [ft.dropdown.Option("best", text="Best Available (Max)")]
             for res in self.available_resolutions:
                 if res >= 360:
-                    text_str = f"{res}p Resolution limit"
-                    if res == 2160:
-                        text_str = "4K Resolution limit"
+                    if res == 4320:
+                        text_str = "4320p (7680 x 4320) [8K]"
+                    elif res == 2160:
+                        text_str = "2160p (3840 x 2160) [4K]"
+                    elif res == 1920:
+                        text_str = "1920p (1080 x 1920) [FHD]"
+                    elif res == 1800:
+                        text_str = "1800p (3200 x 1800) [QHD+]"
                     elif res == 1440:
-                        text_str = "1440p (2K) Resolution limit"
-                    elif res == 4320:
-                        text_str = "8K Resolution limit"
+                        text_str = "1440p (2560 x 1440) [2K]"
+                    elif res == 1280:
+                        text_str = "1280p (720 x 1280) [HD]"
+                    elif res == 1080:
+                        text_str = "1080p (1920 x 1080) [FHD]"
+                    elif res == 720:
+                        text_str = "720p (1280 x 720) [HD]"
+                    elif res == 640:
+                        text_str = "640p (480 x 640) [SD]"
+                    elif res == 540:
+                        text_str = "540p (960 x 540) [qHD]"
+                    elif res == 480:
+                        text_str = "480p (854 x 480) [SD]"
+                    elif res == 360:
+                        text_str = "360p (640 x 360) [SD]"
+                    else:
+                        text_str = f"{res}p"
                     qual_opts.append(ft.dropdown.Option(str(res), text=text_str))
             self.quality_dropdown = ft.Dropdown(
                 label="Quality",
@@ -915,10 +995,11 @@ class FetchDialog(ft.AlertDialog):
         """Refresh the filesize chip based on current dropdown selections."""
         is_audio = (self.type_dropdown.value == "Audio Only") if hasattr(self, 'type_dropdown') else self.audio_only_mode
         qual = self.quality_dropdown.value if hasattr(self, 'quality_dropdown') else "best"
+        fmt = self.format_dropdown.value if hasattr(self, 'format_dropdown') else "mp3"
         
         # Update overall size
         if hasattr(self, 'filesize_text'):
-            approx = self._get_approx_size(is_audio=is_audio, quality=qual)
+            approx = self._get_approx_size(is_audio=is_audio, quality=qual, audio_format=fmt)
             self.filesize_text.value = f"~{approx}" if approx else ""
             if hasattr(self, 'filesize_container'):
                 self.filesize_container.visible = bool(approx)
@@ -926,7 +1007,7 @@ class FetchDialog(ft.AlertDialog):
         # Update individual track sizes
         if hasattr(self, 'playlist_checkboxes'):
             for _, entry, size_text in self.playlist_checkboxes:
-                sz_bytes = self._calc_single_approx_size(entry, is_audio, qual, use_format_sizes=False)
+                sz_bytes = self._calc_single_approx_size(entry, is_audio, qual, use_format_sizes=False, audio_format=fmt)
                 sz_str = f" • ~{self._format_bytes(sz_bytes)}" if sz_bytes else ""
                 
                 # Retrieve existing duration string
@@ -1018,7 +1099,7 @@ class FetchDialog(ft.AlertDialog):
             if qual == "best":
                 format_id = "bestvideo+bestaudio/best"
             else:
-                format_id = f"bestvideo[height<={qual}]+bestaudio/best[height<={qual}]"
+                format_id = f"bestvideo[height<={qual}]+bestaudio/best[height<={qual}]/best"
         
         # Per-download options
         embed_thumbnail = self.embed_thumb_switch.value

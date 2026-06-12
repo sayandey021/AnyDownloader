@@ -63,7 +63,7 @@ class DownloadCard(ft.Container):
         is_square = False
         extractor = self.info.get('extractor', '').lower()
         extractor_key = self.info.get('extractor_key', '').lower()
-        if any(x in extractor or x in extractor_key for x in ['tidal', 'spotify', 'apple', 'qobuz', 'soundcloud', 'deezer', 'gaana', 'lastfm']):
+        if any(x in extractor or x in extractor_key for x in ['tidal', 'spotify', 'apple', 'qobuz', 'soundcloud', 'deezer', 'gaana', 'lastfm', 'bandcamp']):
             is_square = True
             
         thumbnails = self.info.get('thumbnails', [])
@@ -278,7 +278,7 @@ class DownloadCard(ft.Container):
                 delete_btn
             ])
             
-        self.update()
+        self.safe_update()
 
     def show_snack(self, message, color):
         if getattr(self, 'snack_bar', None) in self._page.overlay:
@@ -453,7 +453,9 @@ class DownloadCard(ft.Container):
                         except Exception: pass
                     self._page.run_task(_update)
                 else:
-                    self._page.update()
+                    try:
+                        self.update()
+                    except Exception: pass
         except Exception as e:
             print(f"[DEBUG] safe_update error: {e}")
 

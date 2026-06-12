@@ -25,6 +25,26 @@ class HistoryManager:
                     self._history = json.load(f)
         except Exception:
             self._history = []
+            
+        self._clean_old()
+
+    def _clean_old(self):
+        try:
+            from src.backend.settings import SettingsManager
+            days = int(SettingsManager().get('auto_delete_history_days', 0))
+            if days <= 0:
+                return
+            
+            import time
+            cutoff = time.time() - (days * 86400)
+            original_len = len(self._history)
+            
+            self._history = [item for item in self._history if item.get('timestamp', time.time()) >= cutoff]
+            
+            if len(self._history) < original_len:
+                self._save_immediately()
+        except Exception as e:
+            print(f"Error cleaning history: {e}")
 
     def _save_immediately(self):
         with self._lock:
@@ -44,6 +64,10 @@ class HistoryManager:
         self._save_timer.start()
 
     def add_or_update(self, task_id, data):
+        import time
+        if 'timestamp' not in data:
+            data['timestamp'] = time.time()
+            
         with self._lock:
             for idx, item in enumerate(self._history):
                 if item.get('task_id') == task_id:

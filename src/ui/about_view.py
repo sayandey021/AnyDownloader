@@ -34,7 +34,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.5", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.6.0", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         
@@ -88,7 +88,13 @@ class AboutView(ft.Container):
 
         def _show_version_history(e):
             changelog_content = ft.Column([
-                ft.Text("v1.5 (Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("v1.6.0(Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Added supported sites list in 'More' button on Search page\n• Added GIF support for Image downloads\n• Added portrait video resolutions (1920p, 1280p, 640p) and improved resolution tags\n• Added 'Lossless' quality option and accurate file size calculations for .wav and .flac downloads\n• UI updates\n• Known bug Fixes", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.5.1", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Improve website support as native audio platforms\n• Added fallback format logic to prevent download crashes when exact resolutions are missing\n• Replaced silent fetch errors with a prominent Error Panel\n• Improved Sidebar navigation icons with proper fill animations\n• Added percentage to background opacity slider\n• Added setting to suppress notifications\n• UI improvements and settings tweaks", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.5", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
                 ft.Text("• Completely revamped search interface and centralized History tab\n• Redesigned Settings with modern UI components (Segmented buttons, color chips)\n• Improved playlist thumbnail fallback logic and filename formatting\n• Fixed developer options layout and Troubleshoot visibility\n• Reused download tasks for retries\n• Better setup screen with restart prompt", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Divider(color=AppTheme.SURFACE_VARIANT),
                 ft.Text("v1.4", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),

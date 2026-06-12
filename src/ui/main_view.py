@@ -73,7 +73,7 @@ class MainView(ft.Container):
         self.nav_rail = ft.NavigationRail(
             selected_index=0,
             label_type=ft.NavigationRailLabelType.ALL,
-            min_width=90,
+            min_width=110,
             bgcolor=AppTheme.SURFACE,
             group_alignment=-0.85,
             leading=ft.Column([
@@ -84,13 +84,13 @@ class MainView(ft.Container):
             ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             destinations=[
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.SEARCH_OUTLINED, 
-                    selected_icon=ft.Icons.SEARCH, 
+                    icon=ft.Icons.EXPLORE_OUTLINED, 
+                    selected_icon=ft.Icons.EXPLORE, 
                     label="Search"
                 ),
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.HISTORY_OUTLINED, 
-                    selected_icon=ft.Icons.HISTORY, 
+                    icon=ft.Icons.WATCH_LATER_OUTLINED, 
+                    selected_icon=ft.Icons.WATCH_LATER, 
                     label="History"
                 ),
                 ft.NavigationRailDestination(
@@ -232,34 +232,34 @@ class MainView(ft.Container):
 
         def _show_supported_sites(e):
             supported_list = [
-                ("YouTube", ft.Icons.SMART_DISPLAY_ROUNDED, ft.Colors.RED),
-                ("YT Music", ft.Icons.PLAY_CIRCLE_ROUNDED, ft.Colors.RED_600),
-                ("Spotify", ft.Icons.LIBRARY_MUSIC_ROUNDED, ft.Colors.GREEN),
-                ("Apple Music", ft.Icons.APPLE, ft.Colors.RED_ACCENT),
-                ("Instagram", ft.Icons.CAMERA_ALT_ROUNDED, ft.Colors.PINK),
-                ("Twitter / X", ft.Icons.ALTERNATE_EMAIL_ROUNDED, ft.Colors.BLUE),
-                ("Facebook", ft.Icons.FACEBOOK_ROUNDED, ft.Colors.BLUE_700),
-                ("TikTok", ft.Icons.MUSIC_NOTE_ROUNDED, ft.Colors.BLACK87),
-                ("SoundCloud", ft.Icons.CLOUD_ROUNDED, ft.Colors.ORANGE),
-                ("Twitch", ft.Icons.LIVE_TV_ROUNDED, ft.Colors.PURPLE),
-                ("Vimeo", ft.Icons.ONDEMAND_VIDEO_ROUNDED, ft.Colors.BLUE_400),
-                ("Reddit", ft.Icons.FORUM_ROUNDED, ft.Colors.ORANGE_900),
-                ("Tidal", ft.Icons.WAVES_ROUNDED, ft.Colors.CYAN),
-                ("Deezer", ft.Icons.EQUALIZER_ROUNDED, ft.Colors.PURPLE_ACCENT),
-                ("JioSaavn", ft.Icons.LIBRARY_MUSIC_ROUNDED, ft.Colors.GREEN_600),
-                ("Gaana", ft.Icons.MUSIC_NOTE_ROUNDED, ft.Colors.RED_400),
-                ("Last.fm", ft.Icons.RADIO_ROUNDED, ft.Colors.RED_600),
-                ("Pinterest", ft.Icons.PIN_DROP_ROUNDED, ft.Colors.RED_800),
-                ("LinkedIn", ft.Icons.WORK_ROUNDED, ft.Colors.BLUE_800),
-                ("Bandcamp", ft.Icons.ALBUM_ROUNDED, ft.Colors.TEAL),
-                ("Dailymotion", ft.Icons.VIDEO_LIBRARY_ROUNDED, ft.Colors.BLUE_600),
-                ("Tumblr", ft.Icons.ARTICLE_ROUNDED, ft.Colors.INDIGO_400),
-                ("Rumble", ft.Icons.PLAY_ARROW_ROUNDED, ft.Colors.GREEN_400),
-                ("Bilibili", ft.Icons.TV_ROUNDED, ft.Colors.LIGHT_BLUE),
-                ("Snapchat", ft.Icons.CHAT_BUBBLE_ROUNDED, ft.Colors.YELLOW_700),
-                ("VK", ft.Icons.GROUPS_ROUNDED, ft.Colors.BLUE_ACCENT),
-                ("Mixcloud", ft.Icons.CLOUD_CIRCLE_ROUNDED, ft.Colors.BLUE_200),
-                ("Audiomack", ft.Icons.HEADSET_ROUNDED, ft.Colors.ORANGE_600),
+                ("YouTube", "youtube.com"),
+                ("YT Music", "music.youtube.com"),
+                ("Spotify", "spotify.com"),
+                ("Apple Music", "music.apple.com"),
+                ("Instagram", "instagram.com"),
+                ("Twitter / X", "x.com"),
+                ("Facebook", "facebook.com"),
+                ("TikTok", "tiktok.com"),
+                ("SoundCloud", "soundcloud.com"),
+                ("Twitch", "twitch.tv"),
+                ("Vimeo", "vimeo.com"),
+                ("Reddit", "reddit.com"),
+                ("Tidal", "tidal.com"),
+                ("Deezer", "deezer.com"),
+                ("JioSaavn", "jiosaavn.com"),
+                ("Gaana", "gaana.com"),
+                ("Last.fm", "last.fm"),
+                ("Pinterest", "pinterest.com"),
+                ("LinkedIn", "linkedin.com"),
+                ("Bandcamp", "bandcamp.com"),
+                ("Dailymotion", "dailymotion.com"),
+                ("Tumblr", "tumblr.com"),
+                ("Rumble", "rumble.com"),
+                ("Bilibili", "bilibili.com"),
+                ("Snapchat", "snapchat.com"),
+                ("VK", "vk.com"),
+                ("Mixcloud", "mixcloud.com"),
+                ("Audiomack", "audiomack.com"),
             ]
             
             grid = ft.GridView(
@@ -272,11 +272,11 @@ class MainView(ft.Container):
                 padding=ft.Padding(left=0, top=0, right=15, bottom=0),
             )
             
-            for site, icon, color in supported_list:
+            for site, domain in supported_list:
                 grid.controls.append(
                     ft.Container(
                         content=ft.Column([
-                            ft.Icon(icon, size=40, color=color),
+                            ft.Image(src=f"https://www.google.com/s2/favicons?domain={domain}&sz=128", width=40, height=40, border_radius=8),
                             ft.Text(site, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY, text_align=ft.TextAlign.CENTER)
                         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                         bgcolor=AppTheme.SURFACE_VARIANT,
@@ -590,7 +590,7 @@ class MainView(ft.Container):
                 self.show_snack("Video info fetched!", AppTheme.SUCCESS)
                 self.open_fetch_dialog(info)
             else:
-                self.show_snack("Failed to fetch info.", AppTheme.ERROR)
+                self.show_error_panel("Failed to fetch info. The URL might be invalid or unsupported.")
                 
             self.safe_update()
         except Exception as e:
@@ -600,8 +600,31 @@ class MainView(ft.Container):
             print(f"[ERROR] Fetching video info failed: {url}")
             traceback.print_exc()
             self.set_loading(False)
-            self.show_snack(f"Error processing video info: {str(e)}", AppTheme.ERROR)
+            self.show_error_panel(f"Error processing video info:\n{str(e)}")
             self.safe_update()
+
+    def show_error_panel(self, message):
+        def close_dlg(e):
+            dlg.open = False
+            self._page.update()
+
+        dlg = ft.AlertDialog(
+            title=ft.Row([ft.Icon(ft.Icons.ERROR_OUTLINE, color=AppTheme.ERROR), ft.Text("Fetch Error", weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY)]),
+            content=ft.Container(
+                content=ft.Text(message, color=AppTheme.TEXT_SECONDARY, selectable=True),
+                width=400,
+                padding=10
+            ),
+            bgcolor=AppTheme.SURFACE,
+            shape=ft.RoundedRectangleBorder(radius=10),
+            actions=[
+                ft.TextButton("Close", on_click=close_dlg)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self._page.overlay.append(dlg)
+        dlg.open = True
+        self._page.update()
 
     def open_fetch_dialog(self, info):
         self._current_dialog = FetchDialog(
