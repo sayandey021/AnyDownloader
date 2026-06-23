@@ -365,19 +365,20 @@ class MainView(ft.Container):
                     content=ft.Column([
                         ft.Text("Any Downloader natively supports fetching from 1000+ websites. Here are some popular ones:", color=AppTheme.TEXT_SECONDARY),
                         ft.Container(content=list_view, height=400, width=550),
-                        ft.TextButton(
-                            "View all 1000+ supported sites", 
-                            icon=ft.Icons.OPEN_IN_NEW_ROUNDED,
-                            url="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"
-                        )
                     ], tight=True, spacing=15),
                     width=550,
                 ),
                 bgcolor=AppTheme.SURFACE,
                 shape=ft.RoundedRectangleBorder(radius=10),
                 actions=[
+                    ft.TextButton(
+                        "View all 1000+ supported sites", 
+                        icon=ft.Icons.OPEN_IN_NEW_ROUNDED,
+                        url="https://github.com/sayandey021/AnyDownloader/blob/main/docs/SUPPORTED_SITES.md"
+                    ),
                     ft.TextButton("Close", on_click=close_dlg)
                 ],
+                actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             )
             self._page.overlay.append(dlg)
             dlg.open = True

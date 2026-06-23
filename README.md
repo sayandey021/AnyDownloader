@@ -11,6 +11,10 @@
     <img src="https://img.shields.io/badge/yt--dlp-Backend-red.svg?logo=youtube&logoColor=white" alt="yt-dlp">
     <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   </p>
+
+  <a href="https://apps.microsoft.com/detail/9N8S0WBRF23F?hl=en&gl=IN&ocid=pdpshare" target="_blank">
+    <img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="160"/>
+  </a>
 </div>
 
 <br>
