@@ -63,7 +63,10 @@ class MainView(ft.Container):
                 final_filepath=item.get('final_filepath'),
                 on_redownload=self.open_fetch_dialog,
                 restored_log_text=item.get('log_text', ""),
-                source_mode=item.get('source_mode', 'audio' if item.get('is_audio') else 'video')
+                source_mode=item.get('source_mode', 'audio' if item.get('is_audio') else 'video'),
+                restored_playlist_id=item.get('playlist_id'),
+                restored_playlist_title=item.get('playlist_title'),
+                restored_playlist_url=item.get('playlist_url')
             )
             self.all_downloads.append(card)
         self.refresh_downloads_list()
@@ -231,57 +234,124 @@ class MainView(ft.Container):
             )
 
         def _show_supported_sites(e):
-            supported_list = [
-                ("YouTube", "youtube.com"),
-                ("YT Music", "music.youtube.com"),
-                ("Spotify", "spotify.com"),
-                ("Apple Music", "music.apple.com"),
-                ("Instagram", "instagram.com"),
-                ("Twitter / X", "x.com"),
-                ("Facebook", "facebook.com"),
-                ("TikTok", "tiktok.com"),
-                ("SoundCloud", "soundcloud.com"),
-                ("Twitch", "twitch.tv"),
-                ("Vimeo", "vimeo.com"),
-                ("Reddit", "reddit.com"),
-                ("Tidal", "tidal.com"),
-                ("Deezer", "deezer.com"),
-                ("JioSaavn", "jiosaavn.com"),
-                ("Gaana", "gaana.com"),
-                ("Last.fm", "last.fm"),
-                ("Pinterest", "pinterest.com"),
-                ("LinkedIn", "linkedin.com"),
-                ("Bandcamp", "bandcamp.com"),
-                ("Dailymotion", "dailymotion.com"),
-                ("Tumblr", "tumblr.com"),
-                ("Rumble", "rumble.com"),
-                ("Bilibili", "bilibili.com"),
-                ("Snapchat", "snapchat.com"),
-                ("VK", "vk.com"),
-                ("Mixcloud", "mixcloud.com"),
-                ("Audiomack", "audiomack.com"),
-            ]
+            categories = {
+                "Video & Streaming": [
+                    ("YouTube", "youtube.com"),
+                    ("Twitch", "twitch.tv"),
+                    #("Kick", "kick.com"),
+                    ("Trovo", "trovo.live"),
+                    #("CHZZK", "chzzk.naver.com"),
+                    ("Vimeo", "vimeo.com"),
+                    ("Dailymotion", "dailymotion.com"),
+                    #("Rumble", "rumble.com"),
+                ],
+                "Music & Audio": [
+                    ("Spotify", "spotify.com"),
+                    ("Apple Music", "music.apple.com"),
+                    ("SoundCloud", "soundcloud.com"),
+                    ("YT Music", "music.youtube.com"),
+                    ("Tidal", "tidal.com"),
+                    ("Deezer", "deezer.com"),
+                    ("JioSaavn", "jiosaavn.com"),
+                    ("Gaana", "gaana.com"),
+                    ("Last.fm", "last.fm"),
+                    ("Bandcamp", "bandcamp.com"),
+                ],
+                "Social Media": [
+                    ("Instagram", "instagram.com"),
+                    ("Twitter / X", "x.com"),
+                    ("Facebook", "facebook.com"),
+                    ("TikTok", "tiktok.com"),
+                    ("Reddit", "reddit.com"),
+                    ("LinkedIn", "linkedin.com"),
+                    ("Snapchat", "snapchat.com"),
+                    ("Patreon", "patreon.com"),
+                    ("Bluesky", "bsky.app"),
+                    ("VK", "vk.com"),
+                ],
+                "Images & Art": [
+                    ("Pinterest", "pinterest.com"),
+                    ("Tumblr", "tumblr.com"),
+                    ("ArtStation", "artstation.com"),
+                    ("DeviantArt", "deviantart.com"),
+                    ("Behance", "behance.net"),
+                    ("Imgur", "imgur.com"),
+                    ("Wallpaper Cave", "wallpapercave.com"),
+                    ("Danbooru", "danbooru.donmai.us"),
+                    ("Wallhaven", "wallhaven.cc"),
+                    ("Tenor", "tenor.com"),
+                ],
+                "Anime & Manga": [
+                    ("9Anime", "9anime.org.lv"),
+                    ("MangaDex", "mangadex.org"),
+                    ("Webtoon", "webtoons.com"),
+                    ("Tapas", "tapas.io"),
+                    ("MangaFire", "mangafire.to"),
+                    ("MangaRead", "mangaread.org"),
+                    ("MangaTaro", "mangataro.org"),
+                    ("Rawkuma", "rawkuma.net"),
+                    ("Dynasty Reader", "dynasty-scans.com"),
+                    ("WeebCentral", "weebcentral.com"),
+                ],
+                "NSFW": [
+                    ("Pornhub", "pornhub.com"),
+                    ("XVideos", "xvideos.com"),
+                    ("XNXX", "xnxx.com"),
+                    ("xhamster", "xhamster.com"),
+                    ("xozilla", "xozilla.xxx"),
+                    ("vikiporn", "vikiporn.com"),
+                    #("Aladin", "aladin.com"),
+                    #("Porndr", "porndr.com"),
+                    #("Xtits", "xtits.xxx"),
+                    ("tik.porn", "tik.porn"),
+                    ("pornpics", "pornpics.com"),
+                    ("HentaiHere", "hentaihere.com"),
+                    #("Simply-Hentai", "simply-hentai.com"),
+                    ("nHentai", "nhentai.net"),
+                ]
+            }
             
-            grid = ft.GridView(
+            custom_icons = {
+                "danbooru.donmai.us": "https://c1.tablecdn.com/pa/danbooru-anime-api-api.jpg",
+                "wallhaven.cc": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQwQmpQPh-suKAlSxDLT8WED_iFQ_sW7roGZ9oBhgoWL4GpfnZRa_c4jeED&s=10",
+                "tumblr.com": "https://avatars.githubusercontent.com/u/366151?s=280&v=4"
+            }
+            
+            list_view = ft.Column(
                 expand=True,
-                runs_count=4,
-                max_extent=150,
-                child_aspect_ratio=1.0,
-                spacing=10,
-                run_spacing=10,
-                padding=ft.Padding(left=0, top=0, right=15, bottom=0),
+                spacing=20,
+                scroll=ft.ScrollMode.AUTO,
             )
             
-            for site, domain in supported_list:
-                grid.controls.append(
+            for cat_name, sites in categories.items():
+                grid = ft.GridView(
+                    runs_count=4,
+                    max_extent=120,
+                    child_aspect_ratio=1.0,
+                    spacing=10,
+                    run_spacing=10,
+                )
+                for site, domain in sites:
+                    img_src = custom_icons.get(domain, f"https://www.google.com/s2/favicons?domain={domain}&sz=128")
+                    grid.controls.append(
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Image(src=img_src, width=36, height=36, border_radius=8),
+                                ft.Text(site, weight=ft.FontWeight.W_600, size=12, color=AppTheme.TEXT_PRIMARY, text_align=ft.TextAlign.CENTER)
+                            ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                            bgcolor=AppTheme.SURFACE_VARIANT,
+                            border_radius=10,
+                            padding=8
+                        )
+                    )
+                
+                list_view.controls.append(
                     ft.Container(
                         content=ft.Column([
-                            ft.Image(src=f"https://www.google.com/s2/favicons?domain={domain}&sz=128", width=40, height=40, border_radius=8),
-                            ft.Text(site, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY, text_align=ft.TextAlign.CENTER)
-                        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                        bgcolor=AppTheme.SURFACE_VARIANT,
-                        border_radius=10,
-                        padding=10
+                            ft.Text(cat_name, size=16, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                            grid
+                        ], spacing=10),
+                        padding=ft.Padding(left=0, top=0, right=15, bottom=0)
                     )
                 )
             
@@ -294,14 +364,14 @@ class MainView(ft.Container):
                 content=ft.Container(
                     content=ft.Column([
                         ft.Text("Any Downloader natively supports fetching from 1000+ websites. Here are some popular ones:", color=AppTheme.TEXT_SECONDARY),
-                        ft.Container(content=grid, height=350, width=500),
+                        ft.Container(content=list_view, height=400, width=550),
                         ft.TextButton(
                             "View all 1000+ supported sites", 
                             icon=ft.Icons.OPEN_IN_NEW_ROUNDED,
                             url="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"
                         )
                     ], tight=True, spacing=15),
-                    width=500,
+                    width=550,
                 ),
                 bgcolor=AppTheme.SURFACE,
                 shape=ft.RoundedRectangleBorder(radius=10),
@@ -350,7 +420,7 @@ class MainView(ft.Container):
             style=ft.ButtonStyle(color=AppTheme.ERROR),
             on_click=self.clear_all_search_history
         )
-        self.search_history_list = ft.ListView(expand=True, spacing=10)
+        self.search_history_list = ft.Column(expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
         self.search_history_view = ft.Column([
             ft.Row([
                 ft.Text("Search History", size=28, weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY),
@@ -415,7 +485,7 @@ class MainView(ft.Container):
             self._page.update()
             
             for card in list(self.all_downloads):
-                if card.download_state not in ("active", "paused"):
+                if card.download_state not in ("active", "paused", "queued"):
                     card.is_deleted = True
                     if card.task_id:
                         self.history_manager.remove(card.task_id)
@@ -428,7 +498,7 @@ class MainView(ft.Container):
 
         dlg = ft.AlertDialog(
             title=ft.Text("Clear History", color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
-            content=ft.Text("Are you sure you want to clear all history? Active downloads will not be affected.", color=AppTheme.TEXT_SECONDARY),
+            content=ft.Text("Are you sure you want to clear all history? Active, paused, and queued downloads will not be affected.", color=AppTheme.TEXT_SECONDARY),
             bgcolor=AppTheme.SURFACE,
             shape=ft.RoundedRectangleBorder(radius=10),
             actions=[
@@ -547,10 +617,18 @@ class MainView(ft.Container):
             pass
 
     def fetch_info(self, e):
-        url = self.url_input.value.strip()
-        if not url:
+        raw_input = self.url_input.value.strip()
+        if not raw_input:
             self.show_snack("Please enter a valid URL", AppTheme.ERROR)
             return
+
+        # Extract URL if the input contains extra text (e.g., from a mobile "Share" button)
+        import re
+        url_match = re.search(r'(https?://[^\s]+)', raw_input)
+        if url_match:
+            url = url_match.group(1)
+        else:
+            url = raw_input
 
         self._cancel_fetch = False
         self.set_loading(True)
@@ -573,6 +651,7 @@ class MainView(ft.Container):
             time.sleep(0.1) # Allow the fetching dialog to close properly
             
             if info:
+                info['original_url'] = url
                 title = info.get('title') or info.get('fulltitle') or 'Unknown Title'
                 thumb_url = info.get('thumbnail')
                 if not thumb_url and info.get('thumbnails'):
@@ -585,12 +664,26 @@ class MainView(ft.Container):
                         first = entries[0]
                         thumb_url = first.get('thumbnail') or (first.get('thumbnails', [{}])[0].get('url', '') if first.get('thumbnails') else '')
 
+                # Fallback for archive.org cover photos
+                if not thumb_url and 'archive.org/details/' in url:
+                    import re
+                    m = re.search(r'archive\.org/details/([^/?#&]+)', url)
+                    if m:
+                        thumb_url = f"https://archive.org/services/img/{m.group(1)}"
+                        
+                if thumb_url:
+                    if thumb_url.startswith('//'):
+                        thumb_url = 'https:' + thumb_url
+                    elif thumb_url.startswith('/'):
+                        domain = info.get('webpage_url', 'https://archive.org').split('/')[2]
+                        thumb_url = f"https://{domain}{thumb_url}"
+
                 self.search_history_manager.add_search(url, title, thumb_url)
 
                 self.show_snack("Video info fetched!", AppTheme.SUCCESS)
                 self.open_fetch_dialog(info)
             else:
-                self.show_error_panel("Failed to fetch info. The URL might be invalid or unsupported.")
+                self.show_error_panel("Unable to process this link. It may be invalid, private, or currently unsupported.")
                 
             self.safe_update()
         except Exception as e:
@@ -600,7 +693,7 @@ class MainView(ft.Container):
             print(f"[ERROR] Fetching video info failed: {url}")
             traceback.print_exc()
             self.set_loading(False)
-            self.show_error_panel(f"Error processing video info:\n{str(e)}")
+            self.show_error_panel("Unable to process this link. It may be invalid, private, or currently unsupported.")
             self.safe_update()
 
     def show_error_panel(self, message):
@@ -709,16 +802,57 @@ class MainView(ft.Container):
     def add_download(self, info, format_id, is_audio, output_path, 
                      video_ext=None, audio_codec=None, audio_quality=None,
                      embed_thumbnail=None, embed_subtitles=None, subtitle_lang=None,
-                     custom_filename=None, selected_entries=None, is_image=False, image_ext=None, is_thumbnail=False):
+                     custom_filename=None, selected_entries=None, is_image=False, image_ext=None, is_thumbnail=False, is_manga=False):
         self.clear_dialog()
         
-        # For playlists with selected entries, create a card per selected video
-        if selected_entries:
+        # For manga batches or playlists with selected entries
+        if is_manga and selected_entries:
             import os
             import re
             
+            playlist_title = info.get('title', 'Manga Batch')
+            safe_title = re.sub(r'[\\/*?:"<>|]', "", playlist_title)
+            
+            manga_ext = image_ext or 'pdf'
+            
+            # Ignore default yt-dlp templates that get passed in from the UI for playlists
+            if not custom_filename or '%(' in custom_filename:
+                manga_filename = f"{safe_title}.pdf" if manga_ext == 'pdf' else safe_title
+            else:
+                if manga_ext == 'pdf':
+                    manga_filename = custom_filename if custom_filename.lower().endswith('.pdf') else f"{custom_filename}.pdf"
+                else:
+                    manga_filename = custom_filename
+
+            card = DownloadCard(
+                page=self._page,
+                info=info,
+                backend=self.backend,
+                format_id=format_id,
+                is_audio=False,
+                output_path=output_path,
+                settings=self.settings,
+                custom_filename=manga_filename,
+                is_image=False,
+                image_ext=manga_ext,
+                is_manga=True,
+                selected_entries=selected_entries,
+                on_state_change=self.on_card_state_change,
+                on_redownload=self.open_fetch_dialog,
+                restored_state="queued",
+                source_mode=self.current_mode
+            )
+            self.all_downloads.insert(0, card)
+            
+        elif selected_entries:
+            import os
+            import re
+            import uuid
+            
+            playlist_id = str(uuid.uuid4())
             create_folder = self.settings.get('create_playlist_folder', True)
             playlist_title = info.get('title', 'Playlist')
+            playlist_url = info.get('original_url') or info.get('webpage_url') or info.get('url')
             
             playlist_output_path = output_path
             if create_folder:
@@ -738,28 +872,53 @@ class MainView(ft.Container):
                 resolved_template = re.sub(r'%\(playlist_index\)s', str(idx), resolved_template)
                 resolved_template = re.sub(r'%\(playlist_index\)([0-9]+)d', lambda m: format(int(idx), m.group(1)), resolved_template)
 
+                # For mixed media, detect each entry's type from its format metadata
+                entry_is_image = is_image
+                entry_format_id = format_id
+                entry_image_ext = image_ext
+                entry_video_ext = video_ext
+                
+                formats = entry.get('formats', [])
+                if formats:
+                    vcodec = formats[0].get('vcodec', '')
+                    entry_url = entry.get('url', '')
+                    url_ext = entry_url.split('?')[0].split('.')[-1].lower() if '.' in entry_url.split('?')[0] else ''
+                    
+                    if vcodec == 'image' or url_ext in ('jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tiff', 'pdf'):
+                        entry_is_image = True
+                        entry_format_id = 'best'
+                        entry_image_ext = image_ext or (url_ext if url_ext in ('jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf') else 'jpg')
+                        entry_video_ext = None
+                    else:
+                        entry_is_image = False
+                        entry_format_id = format_id
+                        entry_image_ext = None
+
                 card = DownloadCard(
                     page=self._page,
                     info=entry,
                     backend=self.backend,
-                    format_id=format_id,
+                    format_id=entry_format_id,
                     is_audio=is_audio,
                     output_path=playlist_output_path,
                     settings=self.settings,
-                    video_ext=video_ext,
+                    video_ext=entry_video_ext,
                     audio_codec=audio_codec,
                     audio_quality=audio_quality,
                     embed_thumbnail=embed_thumbnail,
                     embed_subtitles=embed_subtitles,
                     subtitle_lang=subtitle_lang,
                     custom_filename=resolved_template,
-                    is_image=is_image,
-                    image_ext=image_ext,
+                    is_image=entry_is_image,
+                    image_ext=entry_image_ext,
                     is_thumbnail=is_thumbnail,
                     on_state_change=self.on_card_state_change,
                     on_redownload=self.open_fetch_dialog,
                     restored_state="queued",
-                    source_mode=self.current_mode
+                    source_mode=self.current_mode,
+                    restored_playlist_id=playlist_id,
+                    restored_playlist_title=playlist_title,
+                    restored_playlist_url=playlist_url
                 )
                 self.all_downloads.insert(0, card)
         else:
@@ -882,10 +1041,217 @@ class MainView(ft.Container):
         
         print(f"[DEBUG] refresh_downloads_list called. current_mode={self.current_mode}, f_val={f_val}, total_cards={len(self.all_downloads)}")
         
-        # Create a completely new list to bypass Flet caching
-        new_list = ft.ListView(expand=True, spacing=0, item_extent=96, auto_scroll=False)
+        if not hasattr(self, 'playlist_folders'):
+            self.playlist_folders = {}
+            
+        if not hasattr(self, 'downloads_list') or not self.downloads_list:
+            self.downloads_list = ft.Column(expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
+            if hasattr(self, 'downloads_list_container'):
+                self.downloads_list_container.content = self.downloads_list
+
+        main_view_ref = self
+        
+        class PlaylistFolder(ft.Container):
+            def __init__(self, title, child_cards):
+                super().__init__()
+                self.child_cards = []
+                self.is_expanded = False
+                self.list_col = ft.Column([], visible=False, spacing=0)
+                self.icon = ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED, color=AppTheme.TEXT_SECONDARY)
+                
+                self.actions_row = ft.Row(spacing=0)
+                
+                thumb_src = None
+                for c in child_cards:
+                    if getattr(c, 'thumbnail', None) and c.thumbnail.src:
+                        thumb_src = c.thumbnail.src
+                        break
+                        
+                if thumb_src:
+                    self.icon_element = ft.Image(
+                        src=thumb_src,
+                        width=56,
+                        height=56,
+                        fit=ft.BoxFit.COVER,
+                        border_radius=5,
+                        error_content=ft.Container(
+                            content=ft.Icon(ft.Icons.FOLDER_SPECIAL_ROUNDED, size=30, color=AppTheme.PRIMARY),
+                            width=56,
+                            height=56,
+                            bgcolor=AppTheme.SURFACE_VARIANT,
+                            border_radius=5,
+                            alignment=ft.Alignment(0, 0)
+                        )
+                    )
+                else:
+                    self.icon_element = ft.Container(
+                        content=ft.Icon(ft.Icons.FOLDER_SPECIAL_ROUNDED, size=30, color=AppTheme.PRIMARY),
+                        width=56,
+                        height=56,
+                        bgcolor=AppTheme.SURFACE_VARIANT,
+                        border_radius=5,
+                        alignment=ft.Alignment(0, 0)
+                    )
+                
+                self.title_text_ctl = ft.Text(title, weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+                self.status_text_ctl = ft.Text("", size=12, color=AppTheme.TEXT_SECONDARY)
+                
+                self.header = ft.Container(
+                    content=ft.Row([
+                        self.icon_element,
+                        ft.Column([
+                            self.title_text_ctl,
+                            self.status_text_ctl
+                        ], expand=True, spacing=2),
+                        self.actions_row,
+                        self.icon
+                    ]),
+                    padding=15,
+                    bgcolor=AppTheme.SURFACE_VARIANT,
+                    border_radius=10,
+                    on_click=self.toggle,
+                    ink=True
+                )
+                self.content = ft.Column([self.header, self.list_col], spacing=5)
+                self.margin = ft.Margin(left=0, top=0, right=15, bottom=10)
+                self.update_content(child_cards)
+                
+            def toggle(self, e):
+                self.is_expanded = not self.is_expanded
+                self.list_col.visible = self.is_expanded
+                self.icon.name = ft.Icons.KEYBOARD_ARROW_UP_ROUNDED if self.is_expanded else ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED
+                self.update()
+                
+            def update_content(self, child_cards):
+                self.child_cards = child_cards
+                self.list_col.controls = child_cards
+                
+                completed_count = sum(1 for c in child_cards if getattr(c, 'download_state', '') == "completed")
+                active_count = sum(1 for c in child_cards if getattr(c, 'download_state', '') == "active")
+                queued_count = sum(1 for c in child_cards if getattr(c, 'download_state', '') == "queued")
+                total = len(child_cards)
+                remaining_count = total - completed_count
+                
+                if remaining_count == 0:
+                    status_text = f"All {total} items completed"
+                elif active_count > 0:
+                    status_text = f"{active_count} downloading, {remaining_count} remaining, {total} total"
+                elif queued_count > 0:
+                    status_text = f"{queued_count} queued, {remaining_count} remaining, {total} total"
+                else:
+                    status_text = f"{remaining_count} remaining, {total} total"
+                    
+                self.status_text_ctl.value = status_text
+                
+                self.actions_row.controls.clear()
+                
+                has_active = any(getattr(c, 'download_state', '') == "active" for c in child_cards)
+                has_paused = any(getattr(c, 'download_state', '') == "paused" for c in child_cards)
+                has_queued = any(getattr(c, 'download_state', '') == "queued" for c in child_cards)
+                
+                def open_loc(e):
+                    import os
+                    if self.child_cards:
+                        target = getattr(self.child_cards[0], 'output_path', '')
+                        if not target or not os.path.exists(target):
+                            final_fp = getattr(self.child_cards[0], 'final_filepath', '')
+                            if final_fp: target = os.path.dirname(final_fp)
+                        if target and os.path.exists(target):
+                            os.startfile(target)
+                            main_view_ref.show_snack("Opening folder...", AppTheme.SUCCESS)
+                        else:
+                            main_view_ref.show_snack("Folder not found", AppTheme.ERROR)
+                            
+                def pause_all(e):
+                    for c in self.child_cards:
+                        if getattr(c, 'download_state', '') == "active":
+                            c.pause_download(e)
+                    main_view_ref.show_snack("Paused playlist", AppTheme.ACCENT)
+                    
+                def resume_all(e):
+                    for c in self.child_cards:
+                        if getattr(c, 'download_state', '') in ("paused", "queued", "error", "cancelled"):
+                            c.resume_download(e)
+                    main_view_ref.show_snack("Resuming playlist...", AppTheme.SUCCESS)
+                    
+                def stop_all(e):
+                    for c in self.child_cards:
+                        if getattr(c, 'download_state', '') in ("active", "paused", "queued"):
+                            c.stop_download(e)
+                    main_view_ref.show_snack("Stopped playlist", AppTheme.ERROR)
+                    
+                def delete_all(e):
+                    dlg = ft.AlertDialog(
+                        title=ft.Text("Delete Playlist", color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
+                        content=ft.Text("Remove this playlist from the list or also delete downloaded files?", color=AppTheme.TEXT_SECONDARY),
+                        bgcolor=AppTheme.SURFACE,
+                        shape=ft.RoundedRectangleBorder(radius=10),
+                        actions=[
+                            ft.TextButton("Cancel", on_click=lambda e: close_dlg(dlg)),
+                            ft.TextButton("Remove from List", on_click=lambda e: remove_all(dlg)),
+                            ft.TextButton("Delete from Storage", style=ft.ButtonStyle(color=AppTheme.ERROR), on_click=lambda e: delete_files(dlg)),
+                        ],
+                        actions_alignment=ft.MainAxisAlignment.END,
+                    )
+                    main_view_ref._page.overlay.append(dlg)
+                    dlg.open = True
+                    main_view_ref._page.update()
+                    
+                def close_dlg(dlg):
+                    dlg.open = False
+                    main_view_ref._page.update()
+                    
+                def remove_all(dlg):
+                    close_dlg(dlg)
+                    for c in self.child_cards:
+                        c.remove_from_list(None)
+                    
+                def delete_files(dlg):
+                    close_dlg(dlg)
+                    
+                    folder_path = None
+                    if self.child_cards:
+                        folder_path = getattr(self.child_cards[0], 'output_path', '')
+                        
+                    for c in self.child_cards:
+                        c.delete_from_storage(None)
+                        
+                    if folder_path:
+                        import os
+                        try:
+                            if os.path.exists(folder_path) and os.path.isdir(folder_path):
+                                # Only delete the directory if it's completely empty to prevent accidental data loss
+                                if not os.listdir(folder_path):
+                                    os.rmdir(folder_path)
+                        except Exception as e:
+                            print(f"[DEBUG] Failed to remove empty playlist folder: {e}")
+                        
+                if has_active:
+                    self.actions_row.controls.append(ft.IconButton(icon=ft.Icons.PAUSE_ROUNDED, icon_color=AppTheme.ACCENT, tooltip="Pause All", on_click=pause_all))
+                elif has_paused or has_queued:
+                    self.actions_row.controls.append(ft.IconButton(icon=ft.Icons.PLAY_ARROW_ROUNDED, icon_color=AppTheme.SUCCESS, tooltip="Resume All", on_click=resume_all))
+                else:
+                    has_error = any(getattr(c, 'download_state', '') == "error" for c in child_cards)
+                    if has_error:
+                        def retry_errors(e):
+                            for c in self.child_cards:
+                                if getattr(c, 'download_state', '') == "error":
+                                    c.retry_download(e)
+                            main_view_ref.show_snack("Retrying errored downloads...", AppTheme.PRIMARY)
+                        
+                        self.actions_row.controls.append(ft.IconButton(icon=ft.Icons.REFRESH_ROUNDED, icon_color=AppTheme.PRIMARY, tooltip="Retry Errors", on_click=retry_errors))
+                    
+                if has_active or has_paused or has_queued:
+                    self.actions_row.controls.append(ft.IconButton(icon=ft.Icons.STOP_ROUNDED, icon_color=AppTheme.ERROR, tooltip="Stop All", on_click=stop_all))
+                    
+                self.actions_row.controls.append(ft.IconButton(icon=ft.Icons.FOLDER_OPEN_ROUNDED, icon_color=AppTheme.TEXT_SECONDARY, tooltip="Open Folder", on_click=open_loc))
+                
+                if not has_active:
+                    self.actions_row.controls.append(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE_ROUNDED, icon_color=AppTheme.ERROR, tooltip="Delete Playlist", on_click=delete_all))
         
         visible_count = 0
+        groups = {}
+        
         for card in self.all_downloads:
             should_show = False
             if self.current_mode == "downloads":
@@ -903,19 +1269,38 @@ class MainView(ft.Container):
                     should_show = True
                 elif f_val == "error" and card.download_state == "error":
                     should_show = True
-            else:
-                should_show = False
-                
+            
+            card.visible = should_show
             if should_show:
-                card.visible = True
-                new_list.controls.append(card)
                 visible_count += 1
+                pid = getattr(card, 'playlist_id', None)
+                if pid:
+                    if pid not in groups:
+                        groups[pid] = {'title': getattr(card, 'playlist_title', 'Playlist'), 'cards': []}
+                    groups[pid]['cards'].append(card)
+                    
+        new_controls = []
+        added_groups = set()
+        for card in self.all_downloads:
+            if not card.visible:
+                continue
+            pid = getattr(card, 'playlist_id', None)
+            if pid:
+                if pid not in added_groups:
+                    group_data = groups[pid]
+                    if pid not in self.playlist_folders:
+                        self.playlist_folders[pid] = PlaylistFolder(group_data['title'], group_data['cards'])
+                    else:
+                        self.playlist_folders[pid].update_content(group_data['cards'])
+                    new_controls.append(self.playlist_folders[pid])
+                    added_groups.add(pid)
+            else:
+                new_controls.append(card)
                 
         print(f"[DEBUG] refresh_downloads_list matched {visible_count} cards out of {len(self.all_downloads)}")
                 
-        self.downloads_list = new_list
+        self.downloads_list.controls = new_controls
         if hasattr(self, 'downloads_list_container'):
-            self.downloads_list_container.content = self.downloads_list
             try:
                 self.downloads_list_container.update()
             except Exception:

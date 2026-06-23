@@ -21,82 +21,212 @@ class FetchDialog(ft.AlertDialog):
         self.title_padding = 0
         self.inset_padding = ft.Padding(left=20, right=20, top=20, bottom=20)
         
+        # Sanitize top-level title to prevent double extensions during download
+        import re
+        t = self.info.get('title', '').strip()
+        if t:
+            for ext in ['.mp3', '.ogg', '.flac', '.wav', '.m4a', '.mp4', '.mkv', '.webm', '.avi', '.mov']:
+                if t.lower().endswith(ext):
+                    t = t[:-len(ext)].strip()
+            t = re.sub(r'_(512kb|archive|spectrogram|1080p|720p|480p|360p|240p|vbr|hq)$', '', t, flags=re.IGNORECASE).strip()
+            if t:
+                self.info['title'] = t
+        
         # Force audio-only for Spotify content
         extractor_key = self.info.get('extractor_key', '').lower()
-        self.is_audio_platform = self.info.get('_spotify') or extractor_key in ['spotify', 'soundcloud', 'applemusic', 'deezer', 'tidal', 'gaana', 'lastfm', 'mixcloud'] or 'bandcamp' in extractor_key or 'jiosaavn' in extractor_key
+        self.is_audio_platform = self.info.get('_spotify') or extractor_key in ['spotify', 'soundcloud', 'applemusic', 'applepodcasts', 'audioboom', 'deezer', 'tidal', 'gaana', 'lastfm', 'mixcloud'] or 'bandcamp' in extractor_key or 'jiosaavn' in extractor_key or 'podcasts.apple.com' in (self.info.get('original_url') or self.info.get('webpage_url') or '').lower()
         if self.is_audio_platform:
             self.audio_only_mode = True
 
         # Parse available video resolutions
         self.is_playlist = 'entries' in self.info and self.info.get('_type') == 'playlist'
         
-        # Detect image
+        # Detect image & mixed media
         self.is_image = False
+        self.is_mixed = False
+        
+        url_lower = (self.info.get('original_url') or self.info.get('webpage_url') or '').lower()
+        self.is_manga_platform = any(domain in url_lower for domain in [
+            'fanfox.net', 'mangafire.to', 'mangafreak.me', 'mangaread.org', 
+            'mangataro.org', 'hiperdex.com', 'mangadex.org', 'bato.to', 
+            'dynasty-scans.com', 'tapas.io', 'danbooru.donmai.us', 'pinterest.com',
+            'myhentaigallery.com', 'hentaihere.com', 'nhentai', 'rawkuma.net', 'simply-hentai.com', 'weebcentral.com', '8muses.com'
+        ])
+        
+        self.is_document_platform = any(domain in url_lower for domain in ['slideshare.net', 'scribd.com', 'issuu.com', 'docdroid.net', 'speakerdeck.com'])
+        
+        if self.is_manga_platform or self.is_document_platform:
+            self.is_image = True
         if self.is_audio_platform:
             pass
         elif self.is_playlist:
-            if self.info.get('id') == 'gallery':
-                self.is_image = True
-            else:
-                entries = self.info.get('entries', [])
-                if entries:
-                    all_images = True
-                    checked_any = False
-                    for entry in entries:
-                        entry_formats = entry.get('formats', [])
-                        if not entry_formats:
-                            continue
-                        checked_any = True
+            entries = self.info.get('entries', [])
+            if entries:
+                # Deduplicate entries by title and merge formats (fixes archive.org exposing formats as separate entries)
+                seen_titles = {}
+                unique_entries = []
+                import re
+                for e in entries:
+                    t = e.get('title', '').strip()
+                    # Remove common extensions from title for deduplication
+                    for ext in ['.mp3', '.ogg', '.flac', '.wav', '.m4a', '.mp4', '.mkv', '.webm', '.avi', '.mov']:
+                        if t.lower().endswith(ext):
+                            t = t[:-len(ext)].strip()
+                            
+                    # Aggressively strip archive.org derivative suffixes
+                    t = re.sub(r'_(512kb|archive|spectrogram|1080p|720p|480p|360p|240p|vbr|hq)$', '', t, flags=re.IGNORECASE).strip()
+                    
+                    if t:
+                        # Save the cleaned title back to prevent double extensions during download
+                        e['title'] = t
+                        
+                    if t and t in seen_titles:
+                        # Group formats into the original entry so they can be selected in the quality dropdown
+                        orig_e = seen_titles[t]
+                        if e.get('formats'):
+                            if not orig_e.get('formats'):
+                                orig_e['formats'] = []
+                            orig_e['formats'].extend(e.get('formats', []))
+                        continue
+                        
+                    if t:
+                        seen_titles[t] = e
+                    unique_entries.append(e)
+                entries = unique_entries
+                self.info['entries'] = entries
+                
+                has_video = False
+                has_image = False
+                has_audio = False
+                for entry in entries:
+                    entry_formats = entry.get('formats', [])
+                    ext = entry.get('ext', '').lower()
+                    vcodec = entry.get('vcodec')
+                    acodec = entry.get('acodec')
+                    if '?' in ext: ext = ext.split('?')[0]
+                    if not ext and entry.get('url'):
+                        ext = entry['url'].split('?')[0].split('.')[-1][:4].lower()
+                        
+                    is_img = False
+                    is_aud = False
+                    is_vid = False
+                    
+                    if ext in ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'] or vcodec == 'image':
+                        is_img = True
+                        
+                    if entry_formats:
+                        all_images = True
+                        all_audio = True
                         for f in entry_formats:
-                            ext = f.get('ext', '').lower()
-                            if ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv']:
+                            f_ext = f.get('ext', '').lower()
+                            f_vcodec = f.get('vcodec')
+                            f_acodec = f.get('acodec')
+                            
+                            if f_ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv', 'mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac', 'm3u8']:
                                 all_images = False
-                                break
-                            vcodec = f.get('vcodec')
-                            if vcodec and vcodec not in ['image', 'none']:
+                            if (f_vcodec and f_vcodec not in ['image', 'none']) or (f_acodec and f_acodec not in ['none']):
                                 all_images = False
-                                break
-                        if not all_images:
-                            break
-                    if all_images and checked_any:
-                        self.is_image = True
+                            if f_vcodec and f_vcodec not in ['none', 'image']:
+                                all_audio = False
+                            if f.get('width') or f.get('height') or f_ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv', 'm3u8', 'ts']:
+                                all_audio = False
+                                
+                        if all_images:
+                            is_img = True
+                        elif all_audio and entry_formats:
+                            is_aud = True
+                        else:
+                            is_vid = True
+                    else:
+                        if ext in ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac'] or (acodec and acodec != 'none' and vcodec in ['none', 'image']):
+                            is_aud = True
+                        elif ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv', 'm3u8', 'ts'] or (vcodec and vcodec not in ['none', 'image']):
+                            is_vid = True
+                        elif is_img:
+                            pass
+                        else:
+                            is_vid = True
+                            
+                    if is_img and not is_vid and not is_aud:
+                        has_image = True
+                    elif is_aud and not is_vid:
+                        has_audio = True
+                    else:
+                        has_video = True
+                        
+                if has_image and not has_video and not has_audio:
+                    self.is_image = True
+                elif has_audio and not has_video and not has_image:
+                    self.audio_only_mode = True
+                elif has_image and (has_video or has_audio):
+                    self.is_mixed = True
         else:
             formats = self.info.get('formats', [])
             if formats:
                 all_images = True
+                all_audio = True
                 for f in formats:
                     # yt-dlp sometimes mislabels tumblr mp4 videos as vcodec='image'
                     ext = f.get('ext', '').lower()
-                    if ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv']:
+                    if ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv', 'mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac', 'm3u8']:
                         all_images = False
-                        break
                     
                     vcodec = f.get('vcodec')
-                    # If the codec is explicitly a video codec, it's not an image
-                    if vcodec and vcodec not in ['image', 'none']:
+                    acodec = f.get('acodec')
+                    
+                    # If the codec is explicitly a video or audio codec, it's not an image
+                    if (vcodec and vcodec not in ['image', 'none']) or (acodec and acodec not in ['none']):
                         all_images = False
-                        break
+                        
+                    if vcodec and vcodec not in ['none', 'image']:
+                        all_audio = False
+                        
+                    # If it has video-specific properties or extensions, it's not purely audio
+                    if f.get('width') or f.get('height') or ext in ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'flv', 'm3u8', 'ts']:
+                        all_audio = False
                         
                 if all_images:
                     self.is_image = True
+                elif all_audio and formats:
+                    self.audio_only_mode = True
+        
         # Detect livestream
         self.is_live = self.info.get('is_live') or self.info.get('live_status') == 'is_live'
         
         self.available_resolutions = []
         self.playlist_checkboxes = []
 
-        if not self.is_playlist:
-            formats = self.info.get('formats', [])
+        self.available_resolutions = []
+        self.playlist_checkboxes = []
+
+        formats = self.info.get('formats', [])
+        if not formats and self.is_playlist and self.info.get('entries'):
+            for entry in self.info.get('entries'):
+                if entry.get('formats'):
+                    formats = entry.get('formats')
+                    break
+
+        if formats:
             resolutions = set()
             for f in formats:
                 h = f.get('height')
+                if not h and f.get('resolution') and 'x' in str(f.get('resolution')):
+                    try:
+                        h = int(str(f.get('resolution')).split('x')[1])
+                    except:
+                        pass
+                if not h and f.get('width'):
+                    try:
+                        h = int(f.get('width')) * 9 // 16
+                    except:
+                        pass
+                
                 vcodec = f.get('vcodec')
-                if h and vcodec and vcodec != 'none':
+                if h and (vcodec != 'none' or 'video' in f.get('format', '').lower()):
                     resolutions.add(h)
             self.available_resolutions = sorted(list(resolutions), reverse=True)
-            if not self.available_resolutions:
-                self.available_resolutions = [4320, 2160, 1440, 1080, 720, 480, 360]
-        else:
+            
+        if not self.available_resolutions:
             self.available_resolutions = [4320, 2160, 1440, 1080, 720, 480, 360]
 
         # Pre-compute format size lookup
@@ -183,14 +313,28 @@ class FetchDialog(ft.AlertDialog):
         # Thumbnail — aspect-ratio aware
         thumb_url = self.info.get('thumbnail')
         if not thumb_url and self.info.get('thumbnails'):
-            thumb_url = self.info['thumbnails'][0]['url']
+            thumb_url = self.info['thumbnails'][-1]['url']
         
         # Fallback for playlists without a top-level thumbnail
         if not thumb_url and self.is_playlist:
             entries = self.info.get('entries', [])
             if entries:
                 first = entries[0]
-                thumb_url = first.get('thumbnail') or (first.get('thumbnails', [{}])[0].get('url', '') if first.get('thumbnails') else '')
+                thumb_url = first.get('thumbnail') or (first.get('thumbnails', [{}])[-1].get('url', '') if first.get('thumbnails') else '')
+
+        # Fallback for archive.org cover photos if yt-dlp missed them
+        if not thumb_url and self.info.get('original_url') and 'archive.org/details/' in self.info.get('original_url'):
+            import re
+            m = re.search(r'archive\.org/details/([^/?#&]+)', self.info.get('original_url'))
+            if m:
+                thumb_url = f"https://archive.org/services/img/{m.group(1)}"
+                
+        if thumb_url:
+            if thumb_url.startswith('//'):
+                thumb_url = 'https:' + thumb_url
+            elif thumb_url.startswith('/'):
+                domain = self.info.get('webpage_url', 'https://archive.org').split('/')[2]
+                thumb_url = f"https://{domain}{thumb_url}"
 
         thumb_display_w = 280
         vid_w = self.info.get('width')
@@ -198,7 +342,7 @@ class FetchDialog(ft.AlertDialog):
         
         # Audio platforms usually have 1:1 square cover art
         extractor_key = self.info.get('extractor_key', '').lower()
-        is_audio_platform = self.info.get('_spotify') or extractor_key in ['spotify', 'soundcloud', 'applemusic', 'deezer', 'tidal', 'gaana', 'lastfm', 'mixcloud'] or 'bandcamp' in extractor_key
+        is_audio_platform = self.info.get('_spotify') or extractor_key in ['spotify', 'soundcloud', 'applemusic', 'applepodcasts', 'audioboom', 'deezer', 'tidal', 'gaana', 'lastfm', 'mixcloud'] or 'bandcamp' in extractor_key or 'jiosaavn' in extractor_key or 'podcasts.apple.com' in (self.info.get('original_url') or self.info.get('webpage_url') or '').lower()
 
         if vid_w and vid_h and vid_w > 0 and vid_h > 0:
             aspect = vid_w / vid_h
@@ -323,7 +467,7 @@ class FetchDialog(ft.AlertDialog):
                 ft.Container(height=4),
                 ft.Container(
                     content=ft.Text(
-                        f"📋 {count} tracks" if self.audio_only_mode else f"📋 {count} videos",
+                        f"📋 {count} images" if self.is_image else (f"📋 {count} media items" if getattr(self, 'is_mixed', False) else (f"📋 {count} tracks" if self.audio_only_mode else f"📋 {count} videos")),
                         color=AppTheme.ACCENT, size=13, weight=ft.FontWeight.BOLD,
                     ),
                 ),
@@ -402,7 +546,9 @@ class FetchDialog(ft.AlertDialog):
                 item_title = entry.get('title', f'Track {i + 1}' if self.audio_only_mode else f'Video {i + 1}')
 
                 # Get video thumbnail
-                item_thumb_url = entry.get('thumbnail') or entry.get('thumbnails', [{}])[0].get('url', '') if entry.get('thumbnails') else entry.get('thumbnail', '')
+                item_thumb_url = entry.get('thumbnail') or (entry.get('thumbnails', [{}])[0].get('url', '') if entry.get('thumbnails') else '')
+                if not item_thumb_url and thumb_url:
+                    item_thumb_url = thumb_url
 
                 # Duration
                 item_dur = entry.get('duration')
@@ -551,16 +697,31 @@ class FetchDialog(ft.AlertDialog):
         )
 
         # ── Download Type ──
-        if self.is_image:
+        url_str = self.info.get('original_url', '') or self.info.get('webpage_url', '') or self.info.get('url', '') or getattr(self, 'url', '')
+        is_manga_site = getattr(self, 'is_manga_platform', False)
+        is_document_site = getattr(self, 'is_document_platform', False)
+        if is_manga_site:
+            dl_type_val = "Manga"
+            dl_type_opts = [ft.dropdown.Option("Manga")]
+            dl_type_disabled = True
+        elif is_document_site:
+            dl_type_val = "Document"
+            dl_type_opts = [ft.dropdown.Option("Document")]
+            dl_type_disabled = True
+        elif self.is_image:
             dl_type_val = "Image"
             dl_type_opts = [ft.dropdown.Option("Image")]
             dl_type_disabled = True
-        elif self.is_audio_platform:
+        elif getattr(self, 'is_mixed', False):
+            dl_type_val = "Mixed Media"
+            dl_type_opts = [ft.dropdown.Option("Mixed Media")]
+            dl_type_disabled = True
+        elif self.is_audio_platform or getattr(self, 'audio_only_mode', False):
             dl_type_val = "Audio Only"
             dl_type_opts = [ft.dropdown.Option("Audio Only")]
             dl_type_disabled = True
         else:
-            dl_type_val = "Audio Only" if self.audio_only_mode else "Video"
+            dl_type_val = "Video"
             dl_type_opts = [ft.dropdown.Option("Video"), ft.dropdown.Option("Audio Only")]
             dl_type_disabled = False
 
@@ -579,6 +740,11 @@ class FetchDialog(ft.AlertDialog):
 
         # ── Section: Embed Options ──
         embed_thumb_default = self.settings.get('embed_thumbnail', False)
+        
+        # Disable embed thumbnail switch automatically for 9anime/anime8 downloads
+        if self.info.get('_is_9anime') or self.info.get('_is_anime8') or self.info.get('_is_animeflv'):
+            embed_thumb_default = False
+            
         embed_subs_default = self.settings.get('embed_subtitles', False)
         sub_lang_default = self.settings.get('auto_subtitle_lang', 'en')
 
@@ -694,13 +860,28 @@ class FetchDialog(ft.AlertDialog):
     def _build_format_size_map(self):
         """Index yt-dlp formats by height for quick size lookup."""
         size_map = {}  # height -> best filesize estimate
-        if self.is_playlist:
-            return size_map
         formats = self.info.get('formats', [])
+        if not formats and getattr(self, 'is_playlist', False) and self.info.get('entries'):
+            for entry in self.info.get('entries'):
+                if entry.get('formats'):
+                    formats = entry.get('formats')
+                    break
+                    
         for f in formats:
             h = f.get('height')
+            if not h and f.get('resolution') and 'x' in str(f.get('resolution')):
+                try:
+                    h = int(str(f.get('resolution')).split('x')[1])
+                except:
+                    pass
+            if not h and f.get('width'):
+                try:
+                    h = int(f.get('width')) * 9 // 16
+                except:
+                    pass
+                    
             vcodec = f.get('vcodec')
-            if not h or vcodec == 'none':
+            if not h or (vcodec == 'none' and 'video' not in f.get('format', '').lower()):
                 continue
             size = f.get('filesize') or f.get('filesize_approx') or 0
             if not size:
@@ -829,7 +1010,10 @@ class FetchDialog(ft.AlertDialog):
         if hasattr(e, 'data') and e.data:
             self.format_dropdown.value = e.data
         fmt = self.format_dropdown.value
-        if hasattr(self, 'quality_dropdown'):
+        
+        is_audio = (self.type_dropdown.value == "Audio Only") if hasattr(self, 'type_dropdown') else self.audio_only_mode
+        
+        if is_audio and hasattr(self, 'quality_dropdown'):
             if fmt in ("wav", "flac"):
                 self.quality_dropdown.options = [
                     ft.dropdown.Option("best", text="Lossless"),
@@ -847,6 +1031,7 @@ class FetchDialog(ft.AlertDialog):
                 if self.quality_dropdown.value == "best":
                     self.quality_dropdown.value = "192"
                 self.quality_dropdown.disabled = False
+                
         self._update_embed_options()
         self._update_filesize()
         self._page.update()
@@ -856,13 +1041,16 @@ class FetchDialog(ft.AlertDialog):
             return
             
         settings_enabled = self.settings.get('embed_thumbnail', False)
+        is_9anime = self.info.get('_is_9anime', False)
+        is_anime8 = self.info.get('_is_anime8', False)
+        is_animeflv = self.info.get('_is_animeflv', False)
         
         if not settings_enabled:
             self.embed_thumb_switch.disabled = True
             self.embed_thumb_switch.value = False
         else:
             current_format = self.format_dropdown.value
-            if current_format == "wav":
+            if current_format == "wav" or is_9anime or is_anime8 or is_animeflv:
                 self.embed_thumb_switch.disabled = True
                 self.embed_thumb_switch.value = False
             else:
@@ -897,8 +1085,9 @@ class FetchDialog(ft.AlertDialog):
             self.format_dropdown.on_select = self._on_format_change
             self.quality_dropdown = ft.Dropdown(
                 label="Audio Quality",
-                value="192",
+                value="0",
                 options=[
+                    ft.dropdown.Option("0", text="Best Available (Original)"),
                     ft.dropdown.Option("320", text="320 kbps (Highest)"),
                     ft.dropdown.Option("256", text="256 kbps (High)"),
                     ft.dropdown.Option("192", text="192 kbps (Standard)"),
@@ -908,15 +1097,86 @@ class FetchDialog(ft.AlertDialog):
                 **dd_style,
             )
             self.quality_dropdown.on_select = self._on_quality_change
+        elif dl_type == "Mixed Media":
+            self.format_dropdown = ft.Dropdown(
+                label="Format",
+                value="original",
+                options=[ft.dropdown.Option("original", "Original Formats")],
+                disabled=True,
+                **dd_style,
+            )
+            self.format_dropdown.on_select = self._on_format_change
+            self.quality_dropdown = ft.Dropdown(
+                label="Quality",
+                value="best",
+                options=[ft.dropdown.Option("best", text="Best Available (Original)")],
+                disabled=True,
+                **dd_style,
+            )
+            self.quality_dropdown.on_select = self._on_quality_change
+        elif dl_type == "Document":
+            self.format_dropdown = ft.Dropdown(
+                label="Format",
+                value="pdf",
+                options=[
+                    ft.dropdown.Option("pdf", text="PDF (Batch)"),
+                    ft.dropdown.Option("jpg", text="JPG (Individual)"),
+                    ft.dropdown.Option("png", text="PNG (Individual)"),
+                    ft.dropdown.Option("webp", text="WEBP (Individual)"),
+                ],
+                disabled=False,
+                **dd_style,
+            )
+            self.format_dropdown.on_select = self._on_format_change
+            self.quality_dropdown = ft.Dropdown(
+                label="Quality",
+                value="best",
+                options=[
+                    ft.dropdown.Option("best", text="Best Available (Original)"),
+                ],
+                **dd_style,
+            )
+            self.quality_dropdown.on_select = self._on_quality_change
+        elif dl_type == "Manga":
+            self.format_dropdown = ft.Dropdown(
+                label="Format",
+                value="pdf",
+                options=[
+                    ft.dropdown.Option("pdf", text="PDF (Batch)"),
+                    ft.dropdown.Option("epub", text="EPUB (Batch)"),
+                    ft.dropdown.Option("jpg", text="JPG (Individual)"),
+                    ft.dropdown.Option("png", text="PNG (Individual)"),
+                    ft.dropdown.Option("webp", text="WEBP (Individual)"),
+                    ft.dropdown.Option("gif", text="GIF (Individual)"),
+                ],
+                disabled=False,
+                **dd_style,
+            )
+            self.format_dropdown.on_select = self._on_format_change
+            self.quality_dropdown = ft.Dropdown(
+                label="Quality",
+                value="best",
+                options=[
+                    ft.dropdown.Option("best", text="Best Available (Original)"),
+                ],
+                **dd_style,
+            )
+            self.quality_dropdown.on_select = self._on_quality_change
         elif dl_type == "Image":
+            default_val = "jpg"
+            url_str = self.info.get('original_url', '') or self.info.get('webpage_url', '') or self.info.get('url', '') or getattr(self, 'url', '')
+            if any(domain in url_str.lower() for domain in ['mangadex.org', 'dynasty-scans.com', 'webtoons.com', 'tapas.io']):
+                default_val = "pdf"
+                
             self.format_dropdown = ft.Dropdown(
                 label="Image Format",
-                value="jpg",
+                value=default_val,
                 options=[
                     ft.dropdown.Option("jpg"),
                     ft.dropdown.Option("png"),
                     ft.dropdown.Option("webp"),
                     ft.dropdown.Option("gif"),
+                    ft.dropdown.Option("pdf"),
                 ],
                 **dd_style,
             )
@@ -938,6 +1198,7 @@ class FetchDialog(ft.AlertDialog):
                     ft.dropdown.Option("mp4"),
                     ft.dropdown.Option("mkv"),
                     ft.dropdown.Option("webm"),
+                    ft.dropdown.Option("mov"),
                 ],
                 **dd_style,
             )
@@ -1064,6 +1325,11 @@ class FetchDialog(ft.AlertDialog):
         self._start_download(e, is_thumbnail=True)
 
     def _start_download(self, e, is_thumbnail=False):
+        if e and e.control:
+            e.control.disabled = True
+            e.control.text = "Starting..."
+            self._page.update()
+
         default_path = self.settings.get('default_download_path')
         if default_path and os.path.isdir(default_path):
             output_path = default_path
@@ -1074,12 +1340,19 @@ class FetchDialog(ft.AlertDialog):
             output_path = filedialog.askdirectory(title="Select Download Folder")
             root.destroy()
             if not output_path:
+                if e and e.control:
+                    e.control.disabled = False
+                    e.control.text = "Record Stream" if getattr(self, 'is_live', False) else ("Thumbnail" if is_thumbnail else "Download")
+                    self._page.update()
                 return
                 
         is_audio = self.type_dropdown.value == "Audio Only"
         is_image = self.type_dropdown.value == "Image"
-        f_ext = self.format_dropdown.value
-        qual = self.quality_dropdown.value
+        is_mixed = self.type_dropdown.value == "Mixed Media"
+        is_manga = self.type_dropdown.value == "Manga"
+        is_document = self.type_dropdown.value == "Document"
+        f_ext = self.format_dropdown.value if self.format_dropdown else None
+        qual = self.quality_dropdown.value if self.quality_dropdown else None
         
         audio_codec = None
         audio_quality = None
@@ -1091,9 +1364,11 @@ class FetchDialog(ft.AlertDialog):
             format_id = "bestaudio/best"
             audio_codec = f_ext
             audio_quality = qual
-        elif is_image:
+        elif is_image or is_manga or is_document:
             format_id = "best"
             image_ext = f_ext
+        elif is_mixed:
+            format_id = "bestvideo+bestaudio/best"
         else:
             video_ext = f_ext
             if qual == "best":
@@ -1115,6 +1390,10 @@ class FetchDialog(ft.AlertDialog):
         if self.is_playlist and 'entries' in self.info and not is_thumbnail:
             selected_entries = [entry for cb, entry, _ in self.playlist_checkboxes if cb.value]
             if not selected_entries:
+                if e and e.control:
+                    e.control.disabled = False
+                    e.control.text = "Record Stream" if getattr(self, 'is_live', False) else ("Thumbnail" if is_thumbnail else "Download")
+                    self._page.update()
                 return  # nothing selected
 
         self.open = False
@@ -1126,5 +1405,6 @@ class FetchDialog(ft.AlertDialog):
                 video_ext=video_ext, audio_codec=audio_codec, audio_quality=audio_quality,
                 embed_thumbnail=embed_thumbnail, embed_subtitles=embed_subtitles,
                 subtitle_lang=subtitle_lang, custom_filename=custom_filename,
-                selected_entries=selected_entries, is_image=is_image, image_ext=image_ext, is_thumbnail=is_thumbnail,
+                selected_entries=selected_entries, is_image=(is_image or is_document), image_ext=image_ext, is_thumbnail=is_thumbnail,
+                is_manga=(is_manga or is_document),
             )

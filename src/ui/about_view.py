@@ -34,7 +34,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.6.0", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.8.0", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         
@@ -88,7 +88,13 @@ class AboutView(ft.Container):
 
         def _show_version_history(e):
             changelog_content = ft.Column([
-                ft.Text("v1.6.0(Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("v1.8.0(Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Playlists now neatly group themselves into their own folders\n• Added handy buttons to pause, resume, or delete entire playlists at once\n• Easily retry any failed downloads inside a playlist folder\n• Squashed a bug where the scrollbar would jump around or overlap cards\n• Error messages now directly show you exactly what went wrong (e.g. '403 Forbidden')", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.7.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• HW acceleration support added\n• App icon bug fixed\n• Advanced settings page redesigned\n• Developer mode bug fixed", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.6.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
                 ft.Text("• Added supported sites list in 'More' button on Search page\n• Added GIF support for Image downloads\n• Added portrait video resolutions (1920p, 1280p, 640p) and improved resolution tags\n• Added 'Lossless' quality option and accurate file size calculations for .wav and .flac downloads\n• UI updates\n• Known bug Fixes", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Divider(color=AppTheme.SURFACE_VARIANT),
                 ft.Text("v1.5.1", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),

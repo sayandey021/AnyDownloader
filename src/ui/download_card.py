@@ -8,9 +8,9 @@ class DownloadCard(ft.Container):
     def __init__(self, page: ft.Page, info: dict, backend, format_id: str, is_audio: bool, output_path: str, settings,
                  video_ext=None, audio_codec=None, audio_quality=None,
                  embed_thumbnail=None, embed_subtitles=None, subtitle_lang=None, custom_filename=None, 
-                 is_image=False, image_ext=None, is_thumbnail=False,
+                 is_image=False, image_ext=None, is_thumbnail=False, is_manga=False, selected_entries=None,
                  on_state_change=None, restored_task_id=None, restored_state=None, final_filepath=None,
-                 on_redownload=None, restored_log_text="", source_mode=None):
+                 on_redownload=None, restored_log_text="", source_mode=None, restored_playlist_id=None, restored_playlist_title=None, restored_playlist_url=None):
         super().__init__()
         self._page = page
         self.info = info
@@ -29,6 +29,8 @@ class DownloadCard(ft.Container):
         self.is_image = is_image
         self.image_ext = image_ext
         self.is_thumbnail = is_thumbnail
+        self.is_manga = is_manga
+        self.selected_entries = selected_entries
         self.on_state_change = on_state_change
         self.download_state = restored_state if restored_state else "active"
         self.task_id = restored_task_id
@@ -39,13 +41,16 @@ class DownloadCard(ft.Container):
         self.log_text = restored_log_text
         self.history_manager = HistoryManager()
         self.source_mode = source_mode if source_mode else ('audio' if is_audio else 'video')
+        self.playlist_id = restored_playlist_id
+        self.playlist_title = restored_playlist_title
+        self.playlist_url = restored_playlist_url
         self._build_ui()
 
     def _build_ui(self):
         self.bgcolor = AppTheme.SURFACE
         self.border_radius = 10
         self.padding = 15
-        self.margin = ft.Margin(left=0, top=0, right=0, bottom=10)
+        self.margin = ft.Margin(left=0, top=0, right=15, bottom=10)
 
         # Thumbnail
         thumb_url = self.info.get('thumbnail')
@@ -182,6 +187,8 @@ class DownloadCard(ft.Container):
             is_image=self.is_image,
             image_ext=self.image_ext,
             is_thumbnail=self.is_thumbnail,
+            is_manga=self.is_manga,
+            selected_entries=self.selected_entries,
             on_log=self.handle_log,
             task_id=self.task_id,
         )
@@ -218,7 +225,10 @@ class DownloadCard(ft.Container):
             'download_state': self.download_state,
             'final_filepath': self.final_filepath,
             'log_text': self.log_text,
-            'source_mode': self.source_mode
+            'source_mode': self.source_mode,
+            'playlist_id': self.playlist_id,
+            'playlist_title': self.playlist_title,
+            'playlist_url': getattr(self, 'playlist_url', None)
         }
         self.history_manager.add_or_update(self.task_id, data)
 
@@ -431,13 +441,34 @@ class DownloadCard(ft.Container):
                 
             base_path = os.path.join(target_dir, base_name_no_ext)
             
-            # Try to delete files matching the base path (e.g., .mp4, .mp3, .webp, .jpg)
+            target_ext = getattr(self, 'extension', '').lstrip('.')
+            if not target_ext and getattr(self, 'final_filepath', None):
+                target_ext = os.path.splitext(self.final_filepath)[1].lstrip('.')
+                
+            extensions_to_delete = [
+                f".{target_ext}",
+                f".{target_ext}.part",
+                f".{target_ext}.ytdl",
+                f".temp.{target_ext}",
+                ".info.json",
+                ".jpg",
+                ".webp"
+            ]
+            
             escaped_path = glob.escape(base_path)
-            for f in glob.glob(f"{escaped_path}.*"):
+            for ext in extensions_to_delete:
+                for f in glob.glob(f"{escaped_path}{ext}"):
+                    try:
+                        os.remove(f)
+                    except Exception:
+                        pass
+                        
+            # Also delete yt-dlp temporary stream files for this base path
+            for f in glob.glob(f"{escaped_path}.f*.*"):
                 try:
                     os.remove(f)
-                except Exception as ex:
-                    print(f"Failed to delete {f}: {ex}")
+                except Exception:
+                    pass
         self.remove_from_list(dlg)
 
     def safe_update(self):
@@ -467,7 +498,9 @@ class DownloadCard(ft.Container):
             self.final_filepath = fname
 
         current_time = time.time()
-        if current_time - self.last_update_time < 0.2 and d['percent'] < 100:
+        current_time = time.time()
+        percent = d.get('percent', 0)
+        if current_time - self.last_update_time < 0.2 and percent < 100:
             return
         self.last_update_time = current_time
 
@@ -475,15 +508,15 @@ class DownloadCard(ft.Container):
         if total is None:
             total = 0
             
-        if total > 0:
-            self.progress_bar.value = d['percent'] / 100.0
+        if total > 0 or percent > 0:
+            self.progress_bar.value = percent / 100.0
         else:
             self.progress_bar.value = None  # Indeterminate for live streams
         
         status = d.get('status', 'downloading')
         if status == 'downloading':
-            if total > 0:
-                self.status_text.value = f"Downloading ({d['percent']:.1f}%)"
+            if total > 0 or percent > 0:
+                self.status_text.value = f"Downloading ({percent:.1f}%)"
             else:
                 downloaded_mb = d.get('downloaded_bytes', 0) / (1024 * 1024)
                 elapsed = d.get('elapsed_secs')
@@ -505,7 +538,8 @@ class DownloadCard(ft.Container):
                 self.status_text.value = status.capitalize()
 
         eta_str = d.get('eta', 'N/A')
-        self.speed_text.value = f"{d['speed']}" + (f" - ETA: {eta_str}" if eta_str and eta_str != 'N/A' else "")
+        speed_str = d.get('speed', '')
+        self.speed_text.value = f"{speed_str}" + (f" - ETA: {eta_str}" if eta_str and eta_str != 'N/A' else "")
 
         # Also add detailed progress to the log text occasionally
         if status == 'downloading':
@@ -516,7 +550,9 @@ class DownloadCard(ft.Container):
                 mb_downloaded = d.get('downloaded_bytes', 0) / (1024 * 1024)
                 if total > 0:
                     total_mb = total / (1024 * 1024)
-                    log_msg = f"Progress: {d['percent']:.1f}% ({mb_downloaded:.1f}MB / {total_mb:.1f}MB) at {d.get('speed', 'N/A')}"
+                    log_msg = f"Progress: {percent:.1f}% ({mb_downloaded:.1f}MB / {total_mb:.1f}MB) at {d.get('speed', 'N/A')}"
+                elif percent > 0:
+                    log_msg = f"Progress: {percent:.1f}% at {d.get('speed', 'N/A')}"
                 else:
                     log_msg = f"Live Download: {mb_downloaded:.1f}MB at {d.get('speed', 'N/A')}"
                 print(f"[DEBUG] UI Update: {log_msg}")

@@ -12,7 +12,7 @@ def patch_flet_exe():
             return
 
         import shutil
-        local_flet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".flet_view")
+        local_flet_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".flet_view"))
         
         # Copy to local workspace to avoid modifying the global Flet installation
         if os.path.exists(local_flet_dir):

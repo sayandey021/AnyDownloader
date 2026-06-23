@@ -293,7 +293,7 @@ class SettingsView(ft.Container):
 
         self.embed_thumbnail_switch = ft.Switch(
             label="Embed Thumbnail in File",
-            value=self.settings.get('embed_thumbnail'),
+            value=self.settings.get('embed_thumbnail', True),
             active_color=AppTheme.PRIMARY,
             label_text_style=ft.TextStyle(color=AppTheme.TEXT_PRIMARY),
         )
@@ -322,6 +322,25 @@ class SettingsView(ft.Container):
             bgcolor=AppTheme.SURFACE,
             border_radius=10,
             prefix_icon=ft.Icons.SUBTITLES_ROUNDED,
+        )
+
+        self.hw_accel_dropdown = ft.Dropdown(
+            label="Hardware Acceleration (FFmpeg)",
+            width=280,
+            value=self.settings.get('hw_accel', 'auto'),
+            border_color=AppTheme.SURFACE_VARIANT,
+            focused_border_color=AppTheme.PRIMARY,
+            color=AppTheme.TEXT_PRIMARY,
+            bgcolor=AppTheme.SURFACE,
+            border_radius=10,
+            options=[
+                ft.dropdown.Option(key="none", text="Disabled"),
+                ft.dropdown.Option(key="auto", text="Auto"),
+                ft.dropdown.Option(key="cuda", text="NVIDIA (CUDA)"),
+                ft.dropdown.Option(key="qsv", text="Intel (QSV)"),
+                ft.dropdown.Option(key="d3d11va", text="AMD/Generic (D3D11VA)"),
+            ],
+            tooltip="Use GPU for faster video processing when FFmpeg is used."
         )
 
         self.browser_cookies_dropdown = ft.Dropdown(
@@ -412,21 +431,38 @@ class SettingsView(ft.Container):
             on_change=_on_dev_mode_change
         )
 
+        def _sub_header(title_text, icon_name):
+            return ft.Row([
+                ft.Icon(icon_name, size=18, color=AppTheme.ACCENT),
+                ft.Text(title_text, size=14, weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY)
+            ], spacing=6)
+
         advanced_section = self._section(
             "Advanced",
             ft.Icons.TUNE_ROUNDED,
             [
+                _sub_header("General Behavior", ft.Icons.SETTINGS_APPLICATIONS_ROUNDED),
                 ft.Row([self.ask_on_close_switch], spacing=20, wrap=True),
-                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
                 ft.Row([self.speed_limit_field, self.auto_delete_history_dropdown], spacing=20, wrap=True),
+                
+                ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
+                
+                _sub_header("Media & Processing", ft.Icons.SLOW_MOTION_VIDEO_ROUNDED),
                 ft.Row([self.embed_thumbnail_switch, self.embed_subs_switch, self.embed_metadata_switch], spacing=30, wrap=True),
-                self.sub_lang_field,
+                ft.Row([self.sub_lang_field, self.hw_accel_dropdown], spacing=10, wrap=True),
+
+                ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
+                
+                _sub_header("Authentication & Bypassing", ft.Icons.LOCK_ROUNDED),
                 ft.Row([self.browser_cookies_dropdown], spacing=10),
                 ft.Row([self.cookies_path_field, cookies_browse_btn], spacing=10),
+                ft.Container(height=4),
                 ft.Text("Or login directly via embedded browser:", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Row([login_yt_btn, login_insta_btn, login_fb_btn, login_x_btn], spacing=10, wrap=True),
-                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
-                self.dev_mode_switch,
+                
+                ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
+                _sub_header("Developer", ft.Icons.CODE_ROUNDED),
+                ft.Row([self.dev_mode_switch], spacing=20, wrap=True),
             ],
         )
 
@@ -718,7 +754,7 @@ class SettingsView(ft.Container):
             self.audio_quality_dropdown, self.ask_on_close_switch,
             self.embed_thumbnail_switch, self.embed_metadata_switch,
             self.embed_subs_switch, self.browser_cookies_dropdown,
-            self.auto_delete_history_dropdown
+            self.auto_delete_history_dropdown, self.hw_accel_dropdown
         ]
         for control in auto_save_controls_change:
             if isinstance(control, ft.Dropdown):

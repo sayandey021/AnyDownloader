@@ -47,7 +47,7 @@ def kill_child_flet():
 def configure_flet_runtime():
     if getattr(sys, 'frozen', False):
         # 1. Bust the taskbar cache
-        new_aumid = os.path.abspath(sys.executable) + "_v3"
+        new_aumid = os.path.abspath(sys.executable) + "_v4"
         os.environ["FLET_APP_USER_MODEL_ID"] = new_aumid
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(new_aumid)
@@ -385,6 +385,8 @@ def main(page: ft.Page):
                 
         threading.Thread(target=download_task, daemon=True).start()
 
+    page.window.visible = True
+    page.update()
 if __name__ == "__main__":
     import ctypes
     def get_msix_aumid():
@@ -410,12 +412,15 @@ if __name__ == "__main__":
     except Exception:
         pass
 
-    temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
-    os.makedirs(temp_dir, exist_ok=True)
-    log_path = os.path.join(temp_dir, "any_downloader_debug.log")
-    sys.stdout = open(log_path, "w", encoding="utf-8", buffering=1)
-    sys.stderr = sys.stdout
-    print("Any Downloader Debug Log Started")
+    # Redirect stdout/stderr to log file ONLY when packaged as an executable.
+    # In development mode (python main.py), print everything directly to the terminal.
+    if getattr(sys, 'frozen', False):
+        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        log_path = os.path.join(temp_dir, "any_downloader_debug.log")
+        sys.stdout = open(log_path, "w", encoding="utf-8", buffering=1)
+        sys.stderr = sys.stdout
+        print("Any Downloader Debug Log Started")
     
     # Resolve assets dir for PyInstaller
     if getattr(sys, 'frozen', False):
@@ -426,4 +431,4 @@ if __name__ == "__main__":
     print(f"Assets dir resolved to: {assets_dir}")
     print(f"Does icon.png exist? {os.path.exists(os.path.join(assets_dir, 'icon.png'))}")
     
-    ft.app(target=main, assets_dir=assets_dir)
+    ft.app(target=main, assets_dir=assets_dir, view=ft.AppView.FLET_APP_HIDDEN)
