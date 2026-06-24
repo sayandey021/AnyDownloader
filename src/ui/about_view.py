@@ -45,10 +45,12 @@ class AboutView(ft.Container):
             text_align=ft.TextAlign.CENTER
         )
 
-        buttons_row_1 = ft.Row([
-            create_button("GitHub", ft.Icons.CODE, "https://github.com/sayandey021", ft.Colors.WHITE),
-            create_button("LinkedIn", ft.Icons.LINK, "https://www.linkedin.com/in/sayan-dey021/", ft.Colors.BLUE_400)
-        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
+        buttons_row = ft.Row([
+            create_button("GitHub", ft.Icons.CODE, "https://github.com/sayandey021/AnyDownloader", ft.Colors.WHITE),
+            create_button("LinkedIn", ft.Icons.LINK, "https://www.linkedin.com/in/sayan-dey021/", ft.Colors.BLUE_400),
+            create_button("Report a Bug", ft.Icons.BUG_REPORT_ROUNDED, "https://github.com/sayandey021/AnyDownloader/issues", ft.Colors.RED_400),
+            create_button("Rate the App", ft.Icons.STAR_ROUNDED, "ms-windows-store://review/?ProductId=9N8S0WBRF23F", ft.Colors.YELLOW_600)
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=15, wrap=True)
 
         support_text = ft.Text(
             "Building free software takes time and passion.\nIf Any Downloader has helped you, please consider supporting its development.\nEvery coffee counts! ☕❤️",
@@ -79,8 +81,8 @@ class AboutView(ft.Container):
             developer,
             ft.Container(height=10),
             description,
-            ft.Container(height=20),
-            buttons_row_1,
+            ft.Container(height=30),
+            buttons_row,
             ft.Container(height=30),
             support_text,
             kofi_btn
@@ -89,7 +91,7 @@ class AboutView(ft.Container):
         def _show_version_history(e):
             changelog_content = ft.Column([
                 ft.Text("v1.8.0(Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
-                ft.Text("• Playlists now neatly group themselves into their own folders\n• Added handy buttons to pause, resume, or delete entire playlists at once\n• Easily retry any failed downloads inside a playlist folder\n• Squashed a bug where the scrollbar would jump around or overlap cards\n• Error messages now directly show you exactly what went wrong (e.g. '403 Forbidden')", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Text("• Pdf and Epub support added for manga and comic sites.\n• Playlists are now group themselves to organize the downloads.\n• Some old sites are fixed and also added support for large no. of new sites.\n• In about tab now 'Report a Bug' and 'Rate App' buttons added.\n• Download tab multiple bug fixed.\n• Download fetch panel bug fixed", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Divider(color=AppTheme.SURFACE_VARIANT),
                 ft.Text("v1.7.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
                 ft.Text("• HW acceleration support added\n• App icon bug fixed\n• Advanced settings page redesigned\n• Developer mode bug fixed", color=AppTheme.TEXT_SECONDARY, size=13),
@@ -117,7 +119,7 @@ class AboutView(ft.Container):
                 ft.Divider(color=AppTheme.SURFACE_VARIANT),
                 ft.Text("v1.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
                 ft.Text("• Initial release\n• Basic YouTube downloading\n• Playlist support", color=AppTheme.TEXT_SECONDARY, size=13),
-            ], scroll=ft.ScrollMode.AUTO, height=300, width=450, spacing=5)
+            ], scroll=ft.ScrollMode.AUTO, height=450, width=600, spacing=5)
             
             def _close_dialog(e):
                 dlg.open = False
@@ -145,8 +147,8 @@ class AboutView(ft.Container):
                 bgcolor=AppTheme.SURFACE_VARIANT,
                 on_click=_show_version_history
             ),
-            alignment=ft.Alignment(1, -1),
-            padding=10
+            top=10,
+            right=10
         )
 
         self.content = ft.Stack([

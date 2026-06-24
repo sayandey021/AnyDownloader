@@ -19,7 +19,7 @@
   "accent_color": "Rose",
   "bg_image_path": "/bg_4.png",
   "bg_image_opacity": 0.6,
-  "close_behavior": "prompt",
-  "ask_on_close": true,
+  "close_behavior": "exit",
+  "ask_on_close": false,
   "developer_mode": false
 }
