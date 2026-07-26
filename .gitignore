@@ -6,3 +6,4 @@ temp/
 __pycache__/
 *.pyc
 MsixTemp/
+debug_dl.json
