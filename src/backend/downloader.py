@@ -1092,7 +1092,8 @@ class DownloaderBackend:
                     out = subprocess.check_output(
                         cmd,
                         stderr=subprocess.DEVNULL,
-                        text=True
+                        text=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                     )
                 except subprocess.CalledProcessError:
                     pass
@@ -1104,7 +1105,8 @@ class DownloaderBackend:
                             out = subprocess.check_output(
                                 ['gallery-dl', '-j', '--cookies-from-browser', browser, url],
                                 stderr=subprocess.DEVNULL,
-                                text=True
+                                text=True,
+                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                             )
                             if '"HTTP redirect to login page' not in out and '"error":' not in out and 'blocked by network security' not in out:
                                 break

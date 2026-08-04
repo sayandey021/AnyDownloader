@@ -19,7 +19,7 @@ This document lists all the websites currently supported by Any Downloader. We d
 | Bilibili | bilibili.com | 🟡 Working (Needs Cookies) |
 | Rumble | rumble.com | 🟢 Verified Working |
 | 17.live | 17.live | 🟡 Working (No Thumbnail) |
-| 56.com | 56.com | 🟡 Working (Download Repetition) |
+| 56.com | 56.com | 🟢 Verified WorkingS |
 | BanBye | banbye.com | 🟡 Working (No Thumbnail) |
 | TwitCasting | twitcasting.tv | 🟢 Verified Working |
 | XboxClips | xboxclips.com | 🟢 Verified Working |
@@ -117,7 +117,9 @@ This document lists all the websites currently supported by Any Downloader. We d
 | ABC News | abcnews.go.com (article videos) | 🟢 Verified Working |
 | Aeon | aeon.co | 🟢 Verified Working |
 | 3sat | 3sat.de | 🟢 Verified Working |
-
+| Motorsport | motorsport.com | 🔴 Not Working |
+| DagelijkseKost | dagelijksekost.vrt.be | 🔴 Not Working |
+| DailyMail | DailyMail.com | 🔴 Not Working |
 
 ### NSFW
 
@@ -161,6 +163,7 @@ This document lists all the websites currently supported by Any Downloader. We d
 | Hiperdex | hiperdex.com | 🟢 Verified Working |
 | MyHentaiGallery | myhentaigallery.com | 🟢 Verified Working |
 | 8muses | 8muses.com | 🟢 Verified Working |
+| MovieFap | MovieFap.com | 🔴 Not Working |
 
 ## 🌐 Other Supported Sites
 These sites are supported by `yt-dlp` and `gallery-dl`, but have not been manually verified in our interface.
@@ -545,8 +548,6 @@ These sites are supported by `yt-dlp` and `gallery-dl`, but have not been manual
 | --- | --- | --- |
 | DacastPlaylist | DacastPlaylist | yt-dlp |
 | DacastVOD | DacastVOD | yt-dlp |
-| DagelijkseKost | dagelijksekost.een.be | yt-dlp |
-| DailyMail | DailyMail | yt-dlp |
 | DailyWire | DailyWire | yt-dlp |
 | DailyWirePodcast | DailyWirePodcast | yt-dlp |
 | damtomo | damtomo:record | yt-dlp |
@@ -2036,8 +2037,6 @@ These sites are supported by `yt-dlp` and `gallery-dl`, but have not been manual
 | MotherlessGalleryExtractor | MotherlessGalleryExtractor | gallery-dl |
 | MotherlessGroupExtractor | MotherlessGroupExtractor | gallery-dl |
 | MotherlessMediaExtractor | MotherlessMediaExtractor | gallery-dl |
-| Motorsport | motorsport.com | yt-dlp |
-| MovieFap | MovieFap | yt-dlp |
 | moviepilot | Moviepilot trailer | yt-dlp |
 | MovingImage | MovingImage | yt-dlp |
 | MSN | MSN | yt-dlp |

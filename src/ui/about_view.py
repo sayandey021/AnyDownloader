@@ -34,7 +34,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.8.0", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.8.1", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         
@@ -90,7 +90,10 @@ class AboutView(ft.Container):
 
         def _show_version_history(e):
             changelog_content = ft.Column([
-                ft.Text("v1.8.0(Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("v1.8.1(Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Mejor UI bug fixed.\n• Some site icons fixed.\n• Some new sites varified.", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.8.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
                 ft.Text("• Pdf and Epub support added for manga and comic sites.\n• Playlists are now group themselves to organize the downloads.\n• Some old sites are fixed and also added support for large no. of new sites.\n• In about tab now 'Report a Bug' and 'Rate App' buttons added.\n• Download tab multiple bug fixed.\n• Download fetch panel bug fixed", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Divider(color=AppTheme.SURFACE_VARIANT),
                 ft.Text("v1.7.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),

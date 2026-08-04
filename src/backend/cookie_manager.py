@@ -20,7 +20,8 @@ class CookieManager:
         # We run this synchronously or asynchronously depending on caller
         # Because we want to know when it finishes, we can just run it using subprocess
         try:
-            subprocess.run([sys.executable, script_path, url, output_file], check=True)
+            import os
+            subprocess.run([sys.executable, script_path, url, output_file], check=True, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
             return output_file
         except Exception as e:
             print(f"[CookieManager] Failed to run cookie browser: {e}")

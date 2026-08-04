@@ -314,7 +314,7 @@ class MainView(ft.Container):
             custom_icons = {
                 "danbooru.donmai.us": "https://c1.tablecdn.com/pa/danbooru-anime-api-api.jpg",
                 "wallhaven.cc": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQwQmpQPh-suKAlSxDLT8WED_iFQ_sW7roGZ9oBhgoWL4GpfnZRa_c4jeED&s=10",
-                "tumblr.com": "https://avatars.githubusercontent.com/u/366151?s=280&v=4"
+                "tumblr.com": "https://avatars.githubusercontent.com/u/366151?s=280&v=4",
             }
             
             list_view = ft.Column(
