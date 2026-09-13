@@ -1,12 +1,12 @@
 # build_msix.ps1
 # This script packages the Flet executable into an MSIX file and signs it with a self-signed certificate.
 
-$IdentityName = "Saayan.AnyDownloader"
+$IdentityName = "SaayanSoft.AnyDownloader"
 $AppName = "AnyDownloader"
 $DisplayName = "Any Downloader"
 $PublisherName = "CN=37E2AF47-D2FC-489C-BDC1-02C989A7B989"
-$PublisherDisplayName = "Saayan"
-$Version = "1.9.0.0"
+$PublisherDisplayName = "SaayanSoft"
+$Version = "1.8.3.0"
 $ExePath = "..\dist\AnyDownloaderApp.exe"
 $MsixDir = "..\MsixTemp"
 $MsixPath = "..\dist\AnyDownloader.msix"
@@ -14,8 +14,8 @@ $CertPath = "..\AnyDownloaderCert.pfx"
 $CertPassword = "password123"
 
 if (-not (Test-Path $ExePath)) {
-    Write-Host "Error: Executable not found at $ExePath. Run 'flet pack' first." -ForegroundColor Red
-    exit 1
+  Write-Host "Error: Executable not found at $ExePath. Run 'flet pack' first." -ForegroundColor Red
+  exit 1
 }
 
 # 1. Prepare Directory
@@ -26,7 +26,7 @@ New-Item -ItemType Directory -Path "$MsixDir\assets" | Out-Null
 
 Copy-Item $ExePath -Destination $MsixDir
 if (Test-Path "..\assets") {
-    Copy-Item "..\assets\*" -Destination "$MsixDir\assets" -Recurse
+  Copy-Item "..\assets\*" -Destination "$MsixDir\assets" -Recurse
 }
 
 # 2. Generate AppxManifest.xml
@@ -70,8 +70,8 @@ $MakeAppx = Get-ChildItem -Path $SdkPath -Filter "makeappx.exe" -Recurse | Where
 $SignTool = Get-ChildItem -Path $SdkPath -Filter "signtool.exe" -Recurse | Where-Object { $_.DirectoryName -match "x64" } | Select-Object -First 1
 
 if (-not $MakeAppx -or -not $SignTool) {
-    Write-Host "Error: MakeAppx.exe or SignTool.exe not found. Please install the Windows 10/11 SDK." -ForegroundColor Red
-    exit 1
+  Write-Host "Error: MakeAppx.exe or SignTool.exe not found. Please install the Windows 10/11 SDK." -ForegroundColor Red
+  exit 1
 }
 
 # 4. Create MSIX
@@ -81,13 +81,13 @@ if (Test-Path $MsixPath) { Remove-Item -Force $MsixPath }
 
 # 5. Generate Certificate if not exists
 if (-not (Test-Path $CertPath)) {
-    Write-Host "Generating Self-Signed Certificate..."
-    Import-Module Microsoft.PowerShell.Security -ErrorAction SilentlyContinue
-    Import-Module PKI -ErrorAction SilentlyContinue
+  Write-Host "Generating Self-Signed Certificate..."
+  Import-Module Microsoft.PowerShell.Security -ErrorAction SilentlyContinue
+  Import-Module PKI -ErrorAction SilentlyContinue
     
-    $Cert = New-SelfSignedCertificate -Type Custom -Subject $PublisherName -KeyUsage DigitalSignature -FriendlyName $AppName -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-    $SecurePassword = ConvertTo-SecureString -String $CertPassword -Force -AsPlainText
-    Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$($Cert.Thumbprint)" -FilePath $CertPath -Password $SecurePassword | Out-Null
+  $Cert = New-SelfSignedCertificate -Type Custom -Subject $PublisherName -KeyUsage DigitalSignature -FriendlyName $AppName -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+  $SecurePassword = ConvertTo-SecureString -String $CertPassword -Force -AsPlainText
+  Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$($Cert.Thumbprint)" -FilePath $CertPath -Password $SecurePassword | Out-Null
 }
 
 # 6. Sign MSIX

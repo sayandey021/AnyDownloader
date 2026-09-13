@@ -35,6 +35,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    version='C:/Users/sayan/AppData/Local/Temp/816d15f9-c24b-4691-bd31-72a1d03f0a82',
+    version='C:/Users/sayan/AppData/Local/Temp/f3bfe3f3-d0a7-49b7-be25-f544df94a5de',
     icon=['../assets/icon.ico'],
 )
