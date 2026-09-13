@@ -10,7 +10,8 @@ class DownloadCard(ft.Container):
                  embed_thumbnail=None, embed_subtitles=None, subtitle_lang=None, custom_filename=None, 
                  is_image=False, image_ext=None, is_thumbnail=False, is_manga=False, selected_entries=None,
                  on_state_change=None, restored_task_id=None, restored_state=None, final_filepath=None,
-                 on_redownload=None, restored_log_text="", source_mode=None, restored_playlist_id=None, restored_playlist_title=None, restored_playlist_url=None):
+                 on_redownload=None, restored_log_text="", source_mode=None, restored_playlist_id=None, restored_playlist_title=None, restored_playlist_url=None,
+                 enable_sponsorblock=None):
         super().__init__()
         self._page = page
         self.info = info
@@ -31,6 +32,7 @@ class DownloadCard(ft.Container):
         self.is_thumbnail = is_thumbnail
         self.is_manga = is_manga
         self.selected_entries = selected_entries
+        self.enable_sponsorblock = enable_sponsorblock
         self.on_state_change = on_state_change
         self.download_state = restored_state if restored_state else "active"
         self.task_id = restored_task_id
@@ -191,6 +193,7 @@ class DownloadCard(ft.Container):
             selected_entries=self.selected_entries,
             on_log=self.handle_log,
             task_id=self.task_id,
+            enable_sponsorblock=self.enable_sponsorblock,
         )
         self.save_history()
 

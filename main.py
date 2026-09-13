@@ -15,7 +15,11 @@ def _ensure_dependencies():
         try:
             subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_file], check=True)
             print("Dependencies installed successfully! Restarting...")
-            os.execl(sys.executable, sys.executable, *sys.argv)
+            if os.name == 'nt':
+                subprocess.call([sys.executable] + sys.argv)
+                sys.exit(0)
+            else:
+                os.execv(sys.executable, [sys.executable] + sys.argv[1:])
         except Exception as e:
             print(f"Failed to install dependencies: {e}")
 
@@ -315,6 +319,37 @@ def main(page: ft.Page):
     if is_ffmpeg_available():
         main_view = MainView(page)
         page.add(main_view)
+
+        # Scheduled backend engine update check (daily, weekly, monthly)
+        def _check_engine_updates_startup():
+            try:
+                import time
+                from src.backend.engine_manager import should_check_for_updates, check_for_engine_updates
+                if should_check_for_updates():
+                    results = check_for_engine_updates()
+                    if results.get('has_updates'):
+                        time.sleep(2.5)  # Wait for UI to fully mount
+                        def show_banner():
+                            upgrades = [k for k, v in results['engines'].items() if v.get('update_available')]
+                            sb = ft.SnackBar(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.UPGRADE_ROUNDED, color=AppTheme.PRIMARY),
+                                    ft.Text(f"Engine update available for {', '.join(upgrades)}! Check Settings > Advanced.", color=AppTheme.TEXT_PRIMARY),
+                                ], spacing=10),
+                                bgcolor=AppTheme.SURFACE_VARIANT,
+                                duration=6000,
+                            )
+                            page.overlay.append(sb)
+                            sb.open = True
+                            page.update()
+                        if hasattr(page, 'run_thread') and page.run_thread:
+                            page.run_thread(show_banner)
+                        else:
+                            show_banner()
+            except Exception as e:
+                print(f"[Main] Engine startup check error: {e}")
+
+        threading.Thread(target=_check_engine_updates_startup, daemon=True).start()
     else:
         progress_bar = ft.ProgressBar(width=400, color=AppTheme.PRIMARY, bgcolor=AppTheme.SURFACE_VARIANT, value=0)
         status_text = ft.Text("Checking dependencies...", size=14, color=AppTheme.TEXT_SECONDARY)

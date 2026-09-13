@@ -196,7 +196,8 @@ class MainView(ft.Container):
             bgcolor=AppTheme.SURFACE,
             color=AppTheme.TEXT_PRIMARY,
             on_select=self.on_filter_change,
-            border_radius=8,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             content_padding=ft.padding.Padding(left=15, right=15, top=5, bottom=5),
         )
         
@@ -803,7 +804,8 @@ class MainView(ft.Container):
     def add_download(self, info, format_id, is_audio, output_path, 
                      video_ext=None, audio_codec=None, audio_quality=None,
                      embed_thumbnail=None, embed_subtitles=None, subtitle_lang=None,
-                     custom_filename=None, selected_entries=None, is_image=False, image_ext=None, is_thumbnail=False, is_manga=False):
+                     custom_filename=None, selected_entries=None, is_image=False, image_ext=None, is_thumbnail=False, is_manga=False,
+                     enable_sponsorblock=None):
         self.clear_dialog()
         
         # For manga batches or playlists with selected entries
@@ -919,7 +921,8 @@ class MainView(ft.Container):
                     source_mode=self.current_mode,
                     restored_playlist_id=playlist_id,
                     restored_playlist_title=playlist_title,
-                    restored_playlist_url=playlist_url
+                    restored_playlist_url=playlist_url,
+                    enable_sponsorblock=enable_sponsorblock
                 )
                 self.all_downloads.insert(0, card)
         else:
@@ -943,7 +946,8 @@ class MainView(ft.Container):
                 is_thumbnail=is_thumbnail,
                 on_state_change=self.on_card_state_change,
                 on_redownload=self.open_fetch_dialog,
-                source_mode=self.current_mode
+                source_mode=self.current_mode,
+                enable_sponsorblock=enable_sponsorblock
             )
             self.all_downloads.insert(0, card)
             
@@ -1314,7 +1318,8 @@ class MainView(ft.Container):
         self.url_input.disabled = is_loading
         self.fetch_btn.disabled = is_loading
         if is_loading:
-            self._page.show_dialog(self.fetching_dialog)
+            if not getattr(self.fetching_dialog, 'open', False):
+                self._page.show_dialog(self.fetching_dialog)
         else:
             if getattr(self.fetching_dialog, 'open', False):
                 self._page.pop_dialog()

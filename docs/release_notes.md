@@ -4,7 +4,45 @@ Welcome to the **Any Downloader** release notes! Below is a comprehensive change
 
 ---
 
-## **v1.8.0 - The Playlist & Folders Update** *(Current)*
+## **v1.9.0 - SponsorBlock & Backend Engines Update** *(Current)*
+
+### ✨ New Features
+- **SponsorBlock Integration**: Integrated native SponsorBlock support for YouTube video and audio downloads. Automatically detects and handles sponsored segments, self-promotions, interaction reminders, intros, outros, previews, and music off-topic sections.
+- **Configurable SponsorBlock Actions**: Choose between:
+  - **Remove Segments**: Cleanly cut out unwanted sponsor segments from the downloaded media using FFmpeg post-processing.
+  - **Mark as Chapters**: Keep the full video intact but label sponsor sections with descriptive chapter markers for easy navigation.
+  - **Remove & Save with Chapters**: Remove sponsored segments while embedding all remaining standard video chapters.
+- **Granular Category Selection & Presets**: Dedicated settings section allowing custom category filtering alongside quick presets (**Default**, **All**, **Minimal**).
+- **Save with Chapters (Chapter Embedding)**: Added a master switch under *Media & Processing* settings to preserve and embed video/audio chapter markers directly into output containers (MKV, MP4, M4A, etc.).
+- **Per-Download SponsorBlock Toggle**: Added an inline SponsorBlock switch directly inside the Fetch Dialog when inspecting YouTube media, allowing on-the-fly toggling per download without changing global settings.
+- **New General Settings Tab**: Added a dedicated *General* tab in Settings for everyday configuration (app close behavior, download speed limits, auto-delete history, metadata/thumbnail/chapter/subtitle embedding, and SponsorBlock), keeping the *Advanced* tab cleanly focused on technical controls (Hardware Acceleration, Browser Cookies, Web Login bypasses, and Developer options).
+- **Multi-Subtitle Embedding**: Added support for embedding multiple subtitle tracks into a single video file. Users can now specify comma-separated language codes (e.g., `en, es, ja, hi`) or `'all'` in Settings or the Fetch Dialog to download and embed multiple soft-coded subtitle streams with proper language metadata tags.
+- **Backend Engines & Dependencies Updater**: Added an integrated engine update manager under *Advanced* settings to keep core download engines (`yt-dlp`, `spotdl`, and `curl_cffi`) up to date directly from inside the app without needing manual terminal commands.
+- **Configurable Engine Update Schedules**: Choose how frequently Any Downloader checks PyPI for engine updates: **Daily**, **Weekly**, **Monthly**, or **Never (Manual Only)**. Checks run unobtrusively in a background thread on startup and notify you when new engine versions are ready.
+- **Manual Engine Check & One-Click Upgrade**: Added status card displaying installed vs latest PyPI versions for each engine, along with a "Check for Updates" button and a one-click "Update Engines Now" pip updater.
+- **Modern Fluent UI & Dropdown Redesign**: Completely overhauled dropdown menus with modern rounded shapes, surface hover animations, and improved contrast.
+- **Expanded Filename & Playlist Template Guides**: Added real-world examples, explanations of dynamic format tags, and one-click preset apply cards inside the Settings template guide modals.
+
+---
+
+## **v1.8.3 - Stability & Compatibility Hotfixes**
+
+### 🐛 Bug Fixes & Polish
+- **Python Path Handling**: Fixed a critical startup restart bug where Python executables located in paths with spaces (such as `C:\Program Files\...`) failed to launch with `can't open file 'C:\Program'`. Switched to safe subprocess handling.
+- **SpotDL / Curl-Cffi Compatibility**: Updated `curl_cffi` requirements (`>=0.7.0`) to resolve dependency conflicts with `spotapi` and Spotify audio metadata extraction.
+- **Flet UI Compatibility**: Pinned `flet>=0.22.0,<=0.85.3` in `requirements.txt` and adjusted checkbox styling properties to prevent breaking socket protocol mismatches with bundled desktop runtimes.
+
+---
+
+## **v1.8.2 - Hotfixes & Stability Improvements**
+
+### 🐛 Bug Fixes
+- **YouTube 403 Errors**: Fixed an issue where downloading from YouTube resulted in an `HTTP Error 403: Forbidden`. The underlying `yt-dlp` package has been updated to bypass the latest bot detection mechanisms.
+- **UI Dialog Crashes**: Fixed a `RuntimeError: Dialog is already opened` crash that occurred when spamming the fetch button or failing to dismiss the loading dialog properly in the Flet UI.
+
+---
+
+## **v1.8.0 - The Playlist & Folders Update**
 *A massive overhaul to how playlists and multiple files are handled within the app, introducing grouped folders and bulk actions.*
 
 ### ✨ New Features

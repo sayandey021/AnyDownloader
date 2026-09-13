@@ -686,7 +686,8 @@ class FetchDialog(ft.AlertDialog):
             bgcolor=AppTheme.BACKGROUND,
             border_color=AppTheme.SURFACE_VARIANT,
             focused_border_color=AppTheme.PRIMARY,
-            border_radius=8,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             text_size=13,
             content_padding=ft.Padding(left=12, right=8, top=10, bottom=10),
         )
@@ -763,8 +764,18 @@ class FetchDialog(ft.AlertDialog):
             on_change=self._on_subs_toggle,
         )
 
+        is_youtube = 'youtube' in (self.info.get('extractor', '') or self.info.get('extractor_key', '') or '').lower() or 'youtube' in (self.info.get('webpage_url', '') or '').lower() or 'youtu.be' in (self.info.get('webpage_url', '') or '').lower()
+        self.sponsorblock_switch = ft.Switch(
+            label="SponsorBlock",
+            value=self.settings.get('enable_sponsorblock', False),
+            active_color=AppTheme.PRIMARY,
+            label_text_style=ft.TextStyle(color=AppTheme.TEXT_PRIMARY, size=12),
+            tooltip="Skip or cut out sponsored segments in YouTube videos",
+            visible=is_youtube,
+        )
+
         self.sub_lang_field = ft.TextField(
-            label="Subtitle Language",
+            label="Subtitle Language(s)",
             value=sub_lang_default,
             width=320,
             border_color=AppTheme.SURFACE_VARIANT,
@@ -775,8 +786,22 @@ class FetchDialog(ft.AlertDialog):
             prefix_icon=ft.Icons.SUBTITLES_ROUNDED,
             text_size=13,
             content_padding=ft.Padding(left=12, right=8, top=10, bottom=10),
+            hint_text="e.g. en, es, hi or all",
+            tooltip="Comma-separated language codes (e.g. en, es, ja, hi) or 'all' to embed multiple subtitle tracks",
+        )
+
+        sub_lang_info_btn = ft.IconButton(
+            ft.Icons.INFO_OUTLINED,
+            icon_color=AppTheme.ACCENT,
+            tooltip="View Subtitle Language guide & presets",
+            on_click=self._show_subtitles_info,
+        )
+
+        self.sub_lang_row = ft.Row(
+            [self.sub_lang_field, sub_lang_info_btn],
+            spacing=5,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
             visible=embed_subs_default,
-            hint_text="e.g. en, hi, es",
         )
 
         # ── Section: Rename ──
@@ -834,7 +859,8 @@ class FetchDialog(ft.AlertDialog):
                 _section_header(ft.Icons.ATTACH_FILE_ROUNDED, "EMBED OPTIONS"),
                 self.embed_thumb_switch,
                 self.embed_subs_switch,
-                self.sub_lang_field,
+                self.sponsorblock_switch,
+                self.sub_lang_row,
 
                 ft.Container(height=4),
                 ft.Divider(height=1, color=AppTheme.SURFACE_VARIANT),
@@ -1065,7 +1091,8 @@ class FetchDialog(ft.AlertDialog):
             bgcolor=AppTheme.BACKGROUND,
             border_color=AppTheme.SURFACE_VARIANT,
             focused_border_color=AppTheme.PRIMARY,
-            border_radius=8,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             text_size=13,
             content_padding=ft.Padding(left=12, right=8, top=10, bottom=10),
         )
@@ -1249,7 +1276,110 @@ class FetchDialog(ft.AlertDialog):
         self._page.update()
 
     def _on_subs_toggle(self, e):
-        self.sub_lang_field.visible = self.embed_subs_switch.value
+        self.sub_lang_row.visible = self.embed_subs_switch.value
+        self._page.update()
+
+    def _show_subtitles_info(self, e):
+        def _close_info(evt=None):
+            info_dlg.open = False
+            self._page.update()
+            if info_dlg in self._page.overlay:
+                self._page.overlay.remove(info_dlg)
+
+        def apply_lang(val):
+            self.sub_lang_field.value = val
+            try:
+                self.sub_lang_field.update()
+            except:
+                pass
+            _close_info()
+
+        presets = [
+            ("en", "English", "Default single language track"),
+            ("en, es", "English & Spanish", "Embed both English and Spanish tracks"),
+            ("en, hi", "English & Hindi", "Embed English and Hindi tracks"),
+            ("en, ja", "English & Japanese", "Embed English and Japanese tracks"),
+            ("en, fr, de", "English, French & German", "Embed multiple European language tracks"),
+            ("all", "All Available Subtitles", "Embed every subtitle language available for the video"),
+        ]
+
+        preset_controls = [
+            ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.SUBTITLES_ROUNDED, color=AppTheme.PRIMARY, size=20),
+                    ft.Column([
+                        ft.Text(p[1], color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.W_600, size=13),
+                        ft.Text(f"Code: {p[0]} — {p[2]}", color=AppTheme.TEXT_SECONDARY, size=11),
+                    ], spacing=2, expand=True),
+                    ft.ElevatedButton(
+                        "Apply",
+                        icon=ft.Icons.CHECK_ROUNDED,
+                        style=ft.ButtonStyle(
+                            bgcolor=AppTheme.PRIMARY,
+                            color=AppTheme.TEXT_PRIMARY,
+                            padding=ft.Padding(12, 6, 12, 6),
+                            shape=ft.RoundedRectangleBorder(radius=8),
+                        ),
+                        on_click=lambda evt, val=p[0]: apply_lang(val)
+                    )
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
+                padding=ft.Padding(left=12, right=14, top=8, bottom=8),
+                margin=ft.Margin(left=0, right=16, top=0, bottom=0),
+                bgcolor=AppTheme.SURFACE_VARIANT,
+                border_radius=10,
+            )
+            for p in presets
+        ]
+
+        info_box = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Icon(ft.Icons.TIPS_AND_UPDATES_ROUNDED, color=AppTheme.ACCENT, size=18),
+                    ft.Text("How Subtitle Embedding Works", weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY, size=13),
+                ], spacing=6),
+                ft.Text(
+                    "• Multiple Languages: Enter multiple 2-letter codes separated by commas (e.g. en, es, hi). All selected tracks will be embedded into the single video.\n"
+                    "• Download All: Type 'all' to automatically download and embed every available subtitle.\n"
+                    "• Soft Subtitles: Tracks are muxed inside the video container (MKV, MP4) with proper language labels so you can switch languages or turn them off anytime in your video player (VLC, TV, etc.).\n"
+                    "• Common codes: en (English), es (Spanish), hi (Hindi), ja (Japanese), fr (French), de (German), ko (Korean), zh-Hans (Chinese), pt (Portuguese), ru (Russian), ar (Arabic).",
+                    color=AppTheme.TEXT_SECONDARY,
+                    size=12,
+                )
+            ], spacing=6),
+            bgcolor=AppTheme.SURFACE_VARIANT,
+            padding=14,
+            border_radius=10,
+            margin=ft.Margin(left=0, right=16, top=0, bottom=0),
+        )
+
+        presets_title = ft.Container(
+            content=ft.Text("Quick Presets (Click Apply):", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY, size=13),
+            margin=ft.Margin(left=2, right=16, top=4, bottom=2),
+        )
+
+        info_dlg = ft.AlertDialog(
+            title=ft.Row([
+                ft.Icon(ft.Icons.SUBTITLES_ROUNDED, color=AppTheme.PRIMARY, size=24),
+                ft.Text("Subtitle Language Guide", color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
+            ], spacing=8),
+            content=ft.Container(
+                content=ft.Column([
+                    info_box,
+                    presets_title,
+                    *preset_controls
+                ], spacing=8, scroll=ft.ScrollMode.AUTO),
+                width=540,
+                height=440,
+            ),
+            bgcolor=AppTheme.SURFACE,
+            shape=ft.RoundedRectangleBorder(radius=12),
+            actions=[
+                ft.TextButton("Close", on_click=_close_info)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self._page.overlay.append(info_dlg)
+        info_dlg.open = True
         self._page.update()
 
     def _update_filesize(self):
@@ -1407,4 +1537,5 @@ class FetchDialog(ft.AlertDialog):
                 subtitle_lang=subtitle_lang, custom_filename=custom_filename,
                 selected_entries=selected_entries, is_image=(is_image or is_document), image_ext=image_ext, is_thumbnail=is_thumbnail,
                 is_manga=(is_manga or is_document),
+                enable_sponsorblock=self.sponsorblock_switch.value if getattr(self, 'sponsorblock_switch', None) else None,
             )

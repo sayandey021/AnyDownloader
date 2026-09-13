@@ -3077,7 +3077,7 @@ class DownloaderBackend:
                        embed_thumbnail=None, embed_subtitles=None, subtitle_lang=None,
                        custom_filename=None, info=None, is_image=False, image_ext=None, 
                        is_thumbnail=False, is_manga=False, selected_entries=None,
-                       on_log=None, task_id=None):
+                       on_log=None, task_id=None, enable_sponsorblock=None):
         import json
         import re
         if 'idolcomplex.com' in url:
@@ -3695,11 +3695,65 @@ class DownloaderBackend:
                 settings.get('embed_subtitles', False) if settings else False
             )
             if should_embed_subs:
-                lang = subtitle_lang or (settings.get('auto_subtitle_lang', 'en') if settings else 'en')
+                raw_lang = subtitle_lang or (settings.get('auto_subtitle_lang', 'en') if settings else 'en')
+                if isinstance(raw_lang, str):
+                    langs = [l.strip() for l in raw_lang.replace(';', ',').split(',') if l.strip()]
+                elif isinstance(raw_lang, (list, tuple)):
+                    langs = [str(l).strip() for l in raw_lang if str(l).strip()]
+                else:
+                    langs = ['en']
+
+                if not langs:
+                    langs = ['en']
+
                 ydl_opts['writesubtitles'] = True
                 ydl_opts['writeautomaticsub'] = True
-                ydl_opts['subtitleslangs'] = [lang]
+                ydl_opts['subtitleslangs'] = langs
+                postprocessors.append({'key': 'FFmpegSubtitlesConvertor', 'format': 'srt'})
                 postprocessors.append({'key': 'FFmpegEmbedSubtitle'})
+
+            # SponsorBlock (YouTube)
+            should_sponsorblock = enable_sponsorblock if enable_sponsorblock is not None else (
+                settings.get('enable_sponsorblock', False) if settings else False
+            )
+            if should_sponsorblock and not is_image:
+                sb_action = settings.get('sponsorblock_action', 'remove') if settings else 'remove'
+                raw_cats = settings.get('sponsorblock_categories', ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro']) if settings else ['sponsor']
+                sb_cats = set(raw_cats) if raw_cats else {'sponsor'}
+
+                postprocessors.append({
+                    'key': 'SponsorBlock',
+                    'categories': sb_cats,
+                    'when': 'after_filter'
+                })
+
+                if sb_action == 'remove':
+                    removable_cats = sb_cats - {'poi_highlight', 'chapter'}
+                    if removable_cats:
+                        postprocessors.append({
+                            'key': 'ModifyChapters',
+                            'remove_sponsor_segments': removable_cats,
+                            'force_keyframes': False
+                        })
+                elif sb_action == 'remove_and_mark':
+                    removable_cats = sb_cats - {'poi_highlight', 'chapter'}
+                    postprocessors.append({
+                        'key': 'ModifyChapters',
+                        'remove_sponsor_segments': removable_cats,
+                        'sponsorblock_chapter_title': '[SponsorBlock]: %(category_names)l',
+                        'force_keyframes': False
+                    })
+                else:
+                    postprocessors.append({
+                        'key': 'ModifyChapters',
+                        'sponsorblock_chapter_title': '[SponsorBlock]: %(category_names)l',
+                    })
+
+            # Embed chapters
+            should_embed_chapters = settings.get('embed_chapters', True) if settings else True
+            if is_image:
+                should_embed_chapters = False
+            ydl_opts['addchapters'] = should_embed_chapters
 
             # Embed metadata
             should_embed_metadata = settings.get('embed_metadata', True) if settings else True
@@ -3710,8 +3764,12 @@ class DownloaderBackend:
                 ydl_opts['external_downloader_args']['ffmpeg'] = []
             ydl_opts['external_downloader_args']['ffmpeg'].extend(['-loglevel', 'info'])
 
-            if should_embed_metadata:
-                postprocessors.append({'key': 'FFmpegMetadata', 'add_metadata': True})
+            if should_embed_metadata or should_embed_chapters:
+                postprocessors.append({
+                    'key': 'FFmpegMetadata',
+                    'add_metadata': should_embed_metadata,
+                    'add_chapters': should_embed_chapters
+                })
                 
                 ydl_opts.setdefault('postprocessor_args', {})
                 if 'ffmpeg' not in ydl_opts['postprocessor_args']:
@@ -4377,6 +4435,41 @@ class DownloaderBackend:
                     ydl_opts['postprocessor_args']['ffmpeg'] = []
                 if fmt == 'mp3':
                     ydl_opts['postprocessor_args']['ffmpeg'].extend(['-id3v2_version', '3'])
+
+            # SponsorBlock (YouTube fallback)
+            should_sponsorblock = settings.get('enable_sponsorblock', False) if settings else False
+            if should_sponsorblock:
+                sb_action = settings.get('sponsorblock_action', 'remove') if settings else 'remove'
+                raw_cats = settings.get('sponsorblock_categories', ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro']) if settings else ['sponsor']
+                sb_cats = set(raw_cats) if raw_cats else {'sponsor'}
+
+                postprocessors.append({
+                    'key': 'SponsorBlock',
+                    'categories': sb_cats,
+                    'when': 'after_filter'
+                })
+
+                if sb_action == 'remove':
+                    removable_cats = sb_cats - {'poi_highlight', 'chapter'}
+                    if removable_cats:
+                        postprocessors.append({
+                            'key': 'ModifyChapters',
+                            'remove_sponsor_segments': removable_cats,
+                            'force_keyframes': False
+                        })
+                elif sb_action == 'remove_and_mark':
+                    removable_cats = sb_cats - {'poi_highlight', 'chapter'}
+                    postprocessors.append({
+                        'key': 'ModifyChapters',
+                        'remove_sponsor_segments': removable_cats,
+                        'sponsorblock_chapter_title': '[SponsorBlock]: %(category_names)l',
+                        'force_keyframes': False
+                    })
+                else:
+                    postprocessors.append({
+                        'key': 'ModifyChapters',
+                        'sponsorblock_chapter_title': '[SponsorBlock]: %(category_names)l',
+                    })
 
             # Embed thumbnail
             should_embed_thumb = embed_thumbnail if embed_thumbnail is not None else (

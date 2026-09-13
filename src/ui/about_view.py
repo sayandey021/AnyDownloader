@@ -34,7 +34,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.8.1", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.9.0", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         
@@ -90,8 +90,14 @@ class AboutView(ft.Container):
 
         def _show_version_history(e):
             changelog_content = ft.Column([
-                ft.Text("v1.8.1(Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
-                ft.Text("• Mejor UI bug fixed.\n• Some site icons fixed.\n• Some new sites varified.", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Text("v1.9.0 (Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Backend Engines & Dependencies updater (yt-dlp, spotdl, curl_cffi) with auto-check schedule (daily, weekly, monthly, manual).\n• SponsorBlock integration for YouTube: automatically cut or mark sponsors, intros, promos, and more.\n• Granular SponsorBlock category selection with quick presets.\n• Save with Chapters: option to preserve and embed chapter markers in downloads.\n• Inline SponsorBlock toggle in Fetch Dialog for instant per-download control.\n• Added new General settings tab; cleanly moved normal options from Advanced.\n• Multi-subtitle embedding: specify multiple languages (e.g. en, es, hi) or 'all' to embed multiple subtitle tracks.\n• Modern rounded Fluent UI & dropdown redesign with interactive template guides.", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.8.3", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Fixed app restart failure when Python is installed in paths with spaces.\n• Fixed dependency compatibility issues with curl_cffi and spotdl.\n• Pinned Flet UI library to prevent desktop runtime socket protocol mismatches.", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.8.2", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Mejor UI bug fixed.\n• Some site icons fixed.\n• Some new sites varified.\n• Fixed YouTube 403 Errors (updated yt-dlp).\n• Fixed UI Dialog 'already opened' crashes.", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Divider(color=AppTheme.SURFACE_VARIANT),
                 ft.Text("v1.8.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
                 ft.Text("• Pdf and Epub support added for manga and comic sites.\n• Playlists are now group themselves to organize the downloads.\n• Some old sites are fixed and also added support for large no. of new sites.\n• In about tab now 'Report a Bug' and 'Rate App' buttons added.\n• Download tab multiple bug fixed.\n• Download fetch panel bug fixed", color=AppTheme.TEXT_SECONDARY, size=13),

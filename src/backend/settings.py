@@ -22,6 +22,7 @@ DEFAULTS = {
     'embed_thumbnail': True,
     'embed_subtitles': False,
     'embed_metadata': True,
+    'embed_chapters': True,
     'auto_subtitle_lang': 'en',
     'browser_cookies': 'none',
     'theme': 'dark',  # 'dark' or 'light'
@@ -33,6 +34,11 @@ DEFAULTS = {
     'create_playlist_folder': True,
     'close_behavior': 'prompt',  # 'prompt', 'tray', 'exit'
     'ask_on_close': True,
+    'enable_sponsorblock': False,
+    'sponsorblock_action': 'remove',  # 'remove' (cut segments) or 'mark' (add chapters)
+    'sponsorblock_categories': ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro'],
+    'engine_update_interval': 'weekly',  # 'never', 'daily', 'weekly', 'monthly'
+    'engine_last_check_time': 0,  # Epoch timestamp
 }
 
 

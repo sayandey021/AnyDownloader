@@ -3,6 +3,11 @@ import os
 from src.ui.theme import AppTheme
 from src.backend.settings import SettingsManager
 from src.backend.ffmpeg_manager import is_ffmpeg_available
+from src.backend.engine_manager import (
+    get_installed_engine_versions,
+    check_for_engine_updates,
+    update_engines,
+)
 import importlib.util
 
 
@@ -110,7 +115,8 @@ class SettingsView(ft.Container):
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             options=[
                 ft.dropdown.Option(key="best", text="Best Quality (Video + Audio)"),
                 ft.dropdown.Option(key="bestvideo[height<=1920]+bestaudio/best", text="1920p"),
@@ -155,7 +161,8 @@ class SettingsView(ft.Container):
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             options=[
                 ft.dropdown.Option(key="mp3", text="MP3"),
                 ft.dropdown.Option(key="aac", text="AAC"),
@@ -173,7 +180,8 @@ class SettingsView(ft.Container):
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             options=[
                 ft.dropdown.Option(key="320", text="320 kbps"),
                 ft.dropdown.Option(key="256", text="256 kbps"),
@@ -205,7 +213,8 @@ class SettingsView(ft.Container):
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             options=[
                 ft.dropdown.Option(key=str(i), text=str(i)) for i in range(1, 11)
             ],
@@ -260,27 +269,30 @@ class SettingsView(ft.Container):
         )
 
         self.speed_limit_field = ft.TextField(
-            label="Download Speed Limit (KB/s, 0 = unlimited)",
+            label="Speed Limit (0 = Unlimited)",
             value=str(int(self.settings.get('speed_limit', 0) / 1024)) if self.settings.get('speed_limit', 0) else "0",
-            width=280,
+            width=300,
             border_color=AppTheme.SURFACE_VARIANT,
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
             prefix_icon=ft.Icons.SPEED_ROUNDED,
+            suffix=ft.Text("KB/s", color=AppTheme.TEXT_SECONDARY, size=12),
             input_filter=ft.NumbersOnlyInputFilter(),
+            tooltip="Download speed limit in KB/s (set 0 for unlimited)",
         )
 
         self.auto_delete_history_dropdown = ft.Dropdown(
             label="Auto Delete History",
-            width=280,
+            width=300,
             value=str(self.settings.get('auto_delete_history_days', 0)),
             border_color=AppTheme.SURFACE_VARIANT,
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             options=[
                 ft.dropdown.Option(key="0", text="Never"),
                 ft.dropdown.Option(key="1", text="Older than 1 day"),
@@ -305,6 +317,14 @@ class SettingsView(ft.Container):
             label_text_style=ft.TextStyle(color=AppTheme.TEXT_PRIMARY),
         )
 
+        self.embed_chapters_switch = ft.Switch(
+            label="Save with Chapters",
+            value=self.settings.get('embed_chapters', True),
+            active_color=AppTheme.PRIMARY,
+            label_text_style=ft.TextStyle(color=AppTheme.TEXT_PRIMARY),
+            tooltip="Embed video/audio chapters and timestamps into the file",
+        )
+
         self.embed_subs_switch = ft.Switch(
             label="Embed Subtitles",
             value=self.settings.get('embed_subtitles'),
@@ -313,16 +333,25 @@ class SettingsView(ft.Container):
         )
 
         self.sub_lang_field = ft.TextField(
-            label="Subtitle Language (e.g. en, es, hi)",
+            label="Subtitle Language(s)",
             value=self.settings.get('auto_subtitle_lang'),
-            width=280,
+            width=320,
             border_color=AppTheme.SURFACE_VARIANT,
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
             border_radius=10,
             prefix_icon=ft.Icons.SUBTITLES_ROUNDED,
+            hint_text="e.g. en, es, hi or all",
+            tooltip="Comma-separated language codes (e.g. en, es, ja, hi) or 'all' to embed multiple subtitle tracks",
         )
+        sub_lang_info_btn = ft.IconButton(
+            ft.Icons.INFO_OUTLINED,
+            icon_color=AppTheme.ACCENT,
+            tooltip="View Subtitle Language guide & presets",
+            on_click=self._show_subtitles_info,
+        )
+        self.sub_lang_row = ft.Row([self.sub_lang_field, sub_lang_info_btn], spacing=5, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
         self.hw_accel_dropdown = ft.Dropdown(
             label="Hardware Acceleration (FFmpeg)",
@@ -332,7 +361,8 @@ class SettingsView(ft.Container):
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             options=[
                 ft.dropdown.Option(key="none", text="Disabled"),
                 ft.dropdown.Option(key="auto", text="Auto"),
@@ -351,7 +381,8 @@ class SettingsView(ft.Container):
             focused_border_color=AppTheme.PRIMARY,
             color=AppTheme.TEXT_PRIMARY,
             bgcolor=AppTheme.SURFACE,
-            border_radius=10,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
             options=[
                 ft.dropdown.Option(key="none", text="None"),
                 ft.dropdown.Option(key="chrome", text="Google Chrome"),
@@ -431,29 +462,210 @@ class SettingsView(ft.Container):
             on_change=_on_dev_mode_change
         )
 
-        def _sub_header(title_text, icon_name):
-            return ft.Row([
-                ft.Icon(icon_name, size=18, color=AppTheme.ACCENT),
-                ft.Text(title_text, size=14, weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY)
-            ], spacing=6)
+        # ── Backend Engines & Updates Controls ──
+        self.engine_interval_dropdown = ft.Dropdown(
+            label="Auto-Check Frequency",
+            width=240,
+            value=self.settings.get('engine_update_interval', 'weekly'),
+            border_color=AppTheme.SURFACE_VARIANT,
+            focused_border_color=AppTheme.PRIMARY,
+            color=AppTheme.TEXT_PRIMARY,
+            bgcolor=AppTheme.SURFACE,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
+            options=[
+                ft.dropdown.Option(key="daily", text="Daily"),
+                ft.dropdown.Option(key="weekly", text="Weekly"),
+                ft.dropdown.Option(key="monthly", text="Monthly"),
+                ft.dropdown.Option(key="never", text="Never (Manual Only)"),
+            ],
+            tooltip="Choose how often Any Downloader checks for updates to yt-dlp and spotdl"
+        )
 
-        advanced_section = self._section(
-            "Advanced",
-            ft.Icons.TUNE_ROUNDED,
+        self.check_engines_btn = ft.OutlinedButton(
+            "Check for Updates",
+            icon=ft.Icons.REFRESH_ROUNDED,
+            style=ft.ButtonStyle(
+                color=AppTheme.TEXT_PRIMARY,
+                side=ft.BorderSide(1, AppTheme.SURFACE_VARIANT),
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=ft.Padding(16, 12, 16, 12),
+            ),
+            on_click=self._on_check_engines_click,
+            tooltip="Query PyPI for newer versions of yt-dlp, spotdl, and curl_cffi"
+        )
+
+        self.update_engines_btn = ft.ElevatedButton(
+            "Update Engines Now",
+            icon=ft.Icons.UPGRADE_ROUNDED,
+            style=ft.ButtonStyle(
+                bgcolor=AppTheme.PRIMARY,
+                color=ft.Colors.WHITE,
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=ft.Padding(16, 12, 16, 12),
+            ),
+            on_click=self._on_update_engines_click,
+            tooltip="Download and install the latest versions of all backend engines"
+        )
+
+        self.engine_status_container = ft.Container(
+            content=self._build_engine_status_content(),
+            padding=ft.Padding(0, 5, 0, 5),
+        )
+
+        # ── SponsorBlock (YouTube) Controls ──
+        def _on_sb_toggle(e):
+            is_enabled = self.sponsorblock_switch.value
+            self.sponsorblock_action_dropdown.disabled = not is_enabled
+            for cb in self.sponsorblock_cat_checkboxes.values():
+                cb.disabled = not is_enabled
+            self.sponsorblock_options_container.opacity = 1.0 if is_enabled else 0.4
+            self.sponsorblock_options_container.update()
+            self._save(e)
+
+        self.sponsorblock_switch = ft.Switch(
+            label="Enable SponsorBlock (YouTube)",
+            value=self.settings.get('enable_sponsorblock', False),
+            active_color=AppTheme.PRIMARY,
+            label_text_style=ft.TextStyle(color=AppTheme.TEXT_PRIMARY),
+            tooltip="Automatically skip or cut out sponsors, promos, and intros in downloaded YouTube videos",
+            on_change=_on_sb_toggle,
+        )
+
+        self.sponsorblock_action_dropdown = ft.Dropdown(
+            label="Action Mode",
+            width=320,
+            value=self.settings.get('sponsorblock_action', 'remove'),
+            border_color=AppTheme.SURFACE_VARIANT,
+            focused_border_color=AppTheme.PRIMARY,
+            color=AppTheme.TEXT_PRIMARY,
+            bgcolor=AppTheme.SURFACE,
+            border_radius=12,
+            menu_style=AppTheme.get_dropdown_menu_style(),
+            disabled=not self.settings.get('enable_sponsorblock', False),
+            options=[
+                ft.dropdown.Option(key="remove", text="Remove Segments (Cut from file)"),
+                ft.dropdown.Option(key="mark", text="Mark as Chapters (Tag segments)"),
+                ft.dropdown.Option(key="remove_and_mark", text="Remove & Save with Chapters (Cut sponsors, tag remaining)"),
+            ],
+            tooltip="Choose whether to cut sponsor segments or embed them as named chapters"
+        )
+
+        SPONSORBLOCK_CATEGORY_DEFS = [
+            ("sponsor", "Sponsors", "Paid promotion, sponsored products, and referral links"),
+            ("selfpromo", "Self-Promotion", "Unpaid promotion, merch, second channels, and personal projects"),
+            ("interaction", "Interaction Reminders", "Subscribe, like, notification bell, or social media reminders"),
+            ("intro", "Intermission / Intro", "Intro animations, channel idents, pause screens, and intermission cards"),
+            ("outro", "Endcards / Outro", "End credits, outro music, and closing title cards"),
+            ("preview", "Preview / Recap", "Recap of previous episodes or preview of upcoming content"),
+            ("filler", "Filler Tangent", "Tangents, non-contextual banter, and superfluous jokes"),
+            ("music_offtopic", "Non-Music Section", "Only applies to music videos: skits, dialogue, or non-song portions"),
+        ]
+
+        saved_sb_cats = self.settings.get('sponsorblock_categories', ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro'])
+        self.sponsorblock_cat_checkboxes = {}
+        sb_checkbox_controls = []
+
+        is_sb_on = self.settings.get('enable_sponsorblock', False)
+        for cat_id, cat_title, cat_desc in SPONSORBLOCK_CATEGORY_DEFS:
+            cb = ft.Checkbox(
+                label=cat_title,
+                value=(cat_id in saved_sb_cats),
+                active_color=AppTheme.PRIMARY,
+                label_style=ft.TextStyle(color=AppTheme.TEXT_PRIMARY, size=13),
+                tooltip=cat_desc,
+                disabled=not is_sb_on,
+                on_change=self._save
+            )
+            self.sponsorblock_cat_checkboxes[cat_id] = cb
+            sb_checkbox_controls.append(cb)
+
+        def _set_sb_preset(cats):
+            for cid, cbox in self.sponsorblock_cat_checkboxes.items():
+                cbox.value = (cid in cats)
+                try:
+                    cbox.update()
+                except Exception:
+                    pass
+            self._save(None)
+
+        def _sb_select_recommended(e):
+            _set_sb_preset({'sponsor', 'selfpromo', 'interaction', 'intro', 'outro'})
+
+        def _sb_select_all(e):
+            _set_sb_preset({c[0] for c in SPONSORBLOCK_CATEGORY_DEFS})
+
+        def _sb_clear_all(e):
+            _set_sb_preset(set())
+
+        sb_preset_row = ft.Row([
+            ft.Text("Quick Presets:", size=12, color=AppTheme.TEXT_SECONDARY),
+            ft.TextButton("Recommended", style=ft.ButtonStyle(color=AppTheme.PRIMARY), on_click=_sb_select_recommended),
+            ft.TextButton("Select All", style=ft.ButtonStyle(color=AppTheme.TEXT_SECONDARY), on_click=_sb_select_all),
+            ft.TextButton("Clear", style=ft.ButtonStyle(color=AppTheme.TEXT_SECONDARY), on_click=_sb_clear_all),
+        ], spacing=5)
+
+        sb_cats_grid = ft.ResponsiveRow(
+            columns=12,
+            controls=[
+                ft.Container(content=cb, col={"sm": 12, "md": 6, "lg": 6})
+                for cb in sb_checkbox_controls
+            ],
+            spacing=5,
+            run_spacing=5
+        )
+
+        self.sponsorblock_options_container = ft.Container(
+            content=ft.Column([
+                ft.Row([self.sponsorblock_action_dropdown], spacing=10),
+                ft.Container(height=5),
+                ft.Row([
+                    ft.Text("Categories to Block:", size=13, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
+                    ft.Container(expand=True),
+                    sb_preset_row
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                sb_cats_grid
+            ], spacing=8),
+            opacity=1.0 if is_sb_on else 0.4,
+            animate_opacity=ft.Animation(250, ft.AnimationCurve.EASE_OUT)
+        )
+
+        def _sub_header(title_text, icon_name=None):
+            return ft.Text(title_text, size=14, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY)
+
+        general_section = self._section(
+            "General",
+            ft.Icons.SETTINGS_ROUNDED,
             [
-                _sub_header("General Behavior", ft.Icons.SETTINGS_APPLICATIONS_ROUNDED),
+                _sub_header("General Behavior"),
                 ft.Row([self.ask_on_close_switch], spacing=20, wrap=True),
                 ft.Row([self.speed_limit_field, self.auto_delete_history_dropdown], spacing=20, wrap=True),
                 
                 ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
                 
-                _sub_header("Media & Processing", ft.Icons.SLOW_MOTION_VIDEO_ROUNDED),
-                ft.Row([self.embed_thumbnail_switch, self.embed_subs_switch, self.embed_metadata_switch], spacing=30, wrap=True),
-                ft.Row([self.sub_lang_field, self.hw_accel_dropdown], spacing=10, wrap=True),
+                _sub_header("Media & Processing"),
+                ft.Row([self.embed_thumbnail_switch, self.embed_subs_switch, self.embed_metadata_switch, self.embed_chapters_switch], spacing=30, wrap=True),
+                self.sub_lang_row,
 
                 ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
                 
-                _sub_header("Authentication & Bypassing", ft.Icons.LOCK_ROUNDED),
+                _sub_header("SponsorBlock (YouTube)"),
+                ft.Row([self.sponsorblock_switch]),
+                self.sponsorblock_options_container,
+            ],
+        )
+
+        advanced_section = self._section(
+            "Advanced",
+            ft.Icons.TUNE_ROUNDED,
+            [
+                _sub_header("Hardware Acceleration"),
+                ft.Text("Use GPU for faster video processing and transcoding when FFmpeg is used.", size=13, color=AppTheme.TEXT_SECONDARY),
+                ft.Row([self.hw_accel_dropdown], spacing=10, wrap=True),
+
+                ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
+                
+                _sub_header("Authentication & Bypassing"),
                 ft.Row([self.browser_cookies_dropdown], spacing=10),
                 ft.Row([self.cookies_path_field, cookies_browse_btn], spacing=10),
                 ft.Container(height=4),
@@ -461,7 +673,18 @@ class SettingsView(ft.Container):
                 ft.Row([login_yt_btn, login_insta_btn, login_fb_btn, login_x_btn], spacing=10, wrap=True),
                 
                 ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
-                _sub_header("Developer", ft.Icons.CODE_ROUNDED),
+                
+                _sub_header("Backend Engines & Updates"),
+                ft.Text("Manage core media download and extraction engines (yt-dlp, spotdl, curl_cffi).", size=13, color=AppTheme.TEXT_SECONDARY),
+                ft.Row([
+                    self.engine_interval_dropdown,
+                    self.check_engines_btn,
+                    self.update_engines_btn,
+                ], spacing=12, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                self.engine_status_container,
+
+                ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
+                _sub_header("Developer"),
                 ft.Row([self.dev_mode_switch], spacing=20, wrap=True),
             ],
         )
@@ -753,11 +976,15 @@ class SettingsView(ft.Container):
             self.playlist_folder_switch, self.audio_codec_dropdown,
             self.audio_quality_dropdown, self.ask_on_close_switch,
             self.embed_thumbnail_switch, self.embed_metadata_switch,
-            self.embed_subs_switch, self.browser_cookies_dropdown,
-            self.auto_delete_history_dropdown, self.hw_accel_dropdown
+            self.embed_subs_switch, self.embed_chapters_switch, self.browser_cookies_dropdown,
+            self.auto_delete_history_dropdown, self.hw_accel_dropdown,
+            self.sponsorblock_action_dropdown, self.engine_interval_dropdown
         ]
         for control in auto_save_controls_change:
             if isinstance(control, ft.Dropdown):
+                if control.options:
+                    for opt in control.options:
+                        opt.style = AppTheme.get_dropdown_option_style()
                 orig_on_select = getattr(control, 'on_select', None)
                 def make_handler(orig):
                     def handler(e):
@@ -782,12 +1009,14 @@ class SettingsView(ft.Container):
             control.on_blur = self._save
 
         tabs = [
+            ft.Tab(label="General", icon=ft.Icons.SETTINGS_ROUNDED),
             ft.Tab(label="Appearance", icon=ft.Icons.PALETTE_ROUNDED),
             ft.Tab(label="Download", icon=ft.Icons.DOWNLOAD_ROUNDED),
             ft.Tab(label="Playlist & Queue", icon=ft.Icons.QUEUE_MUSIC_ROUNDED),
             ft.Tab(label="Advanced", icon=ft.Icons.TUNE_ROUNDED),
         ]
         views = [
+            general_section,
             theme_section,
             download_section,
             playlist_section,
@@ -801,6 +1030,14 @@ class SettingsView(ft.Container):
         tab_bar = ft.TabBar(
             tabs=tabs,
             scrollable=True,
+            splash_border_radius=ft.BorderRadius.all(10),
+            indicator_color=AppTheme.PRIMARY,
+            label_color=AppTheme.PRIMARY,
+            unselected_label_color=AppTheme.TEXT_SECONDARY,
+            indicator=ft.UnderlineTabIndicator(
+                border_side=ft.BorderSide(3, AppTheme.PRIMARY),
+                border_radius=ft.BorderRadius.all(3),
+            ),
         )
 
         tab_view = ft.TabBarView(
@@ -833,13 +1070,21 @@ class SettingsView(ft.Container):
 
     # ------------------------------------------------------------------ helpers
     def _section(self, title: str, icon, children: list) -> ft.Container:
-        return ft.Container(
+        inner_content = ft.Container(
             content=ft.Column(
                 children,
                 spacing=15,
+            ),
+            padding=ft.Padding(left=10, right=28, top=10, bottom=20),
+        )
+        return ft.Container(
+            content=ft.Column(
+                [inner_content],
+                spacing=0,
                 scroll=ft.ScrollMode.AUTO,
             ),
-            padding=20,
+            padding=ft.Padding(left=10, right=4, top=10, bottom=10),
+            expand=True,
         )
 
     # ------------------------------------------------------------------ actions
@@ -903,35 +1148,219 @@ class SettingsView(ft.Container):
             import threading
             threading.Thread(target=run, daemon=True).start()
 
+    def _build_engine_status_content(self, check_results=None):
+        installed = get_installed_engine_versions()
+        last_check_time = float(self.settings.get('engine_last_check_time', 0))
+        if last_check_time > 0:
+            import datetime
+            dt = datetime.datetime.fromtimestamp(last_check_time)
+            last_checked_str = dt.strftime("%b %d, %Y at %I:%M %p")
+        else:
+            last_checked_str = "Never"
+
+        chips = []
+        engine_display = [
+            ("yt-dlp", "yt-dlp (Core Engine)", ft.Icons.PLAY_CIRCLE_ROUNDED),
+            ("spotdl", "spotdl (Spotify)", ft.Icons.MUSIC_NOTE_ROUNDED),
+            ("curl_cffi", "curl_cffi (Bypass)", ft.Icons.SHIELD_ROUNDED),
+        ]
+
+        for key, label, icon in engine_display:
+            curr_v = installed.get(key, 'Unknown')
+            latest_v = None
+            is_newer = False
+            if check_results and 'engines' in check_results:
+                info = check_results['engines'].get(key, {})
+                latest_v = info.get('latest')
+                is_newer = info.get('update_available', False)
+
+            status_badges = []
+            if is_newer and latest_v:
+                status_badges.append(
+                    ft.Container(
+                        content=ft.Text(f"Update: v{latest_v}", size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+                        bgcolor=ft.Colors.AMBER_800,
+                        padding=ft.Padding(6, 2, 6, 2),
+                        border_radius=6,
+                    )
+                )
+            elif curr_v not in ('Not Installed', 'Unknown'):
+                status_badges.append(
+                    ft.Container(
+                        content=ft.Text("Up to date", size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.W_500),
+                        bgcolor=AppTheme.SUCCESS,
+                        padding=ft.Padding(6, 2, 6, 2),
+                        border_radius=6,
+                    )
+                )
+
+            chip = ft.Container(
+                content=ft.Row([
+                    ft.Icon(icon, size=18, color=AppTheme.PRIMARY),
+                    ft.Column([
+                        ft.Text(label, size=12, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
+                        ft.Text(f"Installed: v{curr_v}", size=11, color=AppTheme.TEXT_SECONDARY),
+                    ], spacing=1, expand=True),
+                    *status_badges
+                ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                bgcolor=AppTheme.SURFACE,
+                padding=ft.Padding(12, 8, 12, 8),
+                border_radius=10,
+                border=ft.Border(
+                    top=ft.BorderSide(1, AppTheme.SURFACE_VARIANT),
+                    bottom=ft.BorderSide(1, AppTheme.SURFACE_VARIANT),
+                    left=ft.BorderSide(1, AppTheme.SURFACE_VARIANT),
+                    right=ft.BorderSide(1, AppTheme.SURFACE_VARIANT),
+                ),
+                expand=True,
+            )
+            chips.append(chip)
+
+        return ft.Column([
+            ft.ResponsiveRow([
+                ft.Column([c], col={"sm": 12, "md": 4}) for c in chips
+            ], spacing=10, run_spacing=10),
+            ft.Row([
+                ft.Icon(ft.Icons.SCHEDULE_ROUNDED, size=14, color=AppTheme.TEXT_SECONDARY),
+                ft.Text(f"Last checked: {last_checked_str}", size=11, color=AppTheme.TEXT_SECONDARY),
+            ], spacing=5)
+        ], spacing=8)
+
+    def _on_check_engines_click(self, e):
+        self.check_engines_btn.disabled = True
+        self.check_engines_btn.icon = ft.Icons.HOURGLASS_TOP_ROUNDED
+        self.check_engines_btn.text = "Checking..."
+        self.update()
+
+        def run_check():
+            results = check_for_engine_updates()
+            def update_ui():
+                self.check_engines_btn.disabled = False
+                self.check_engines_btn.icon = ft.Icons.REFRESH_ROUNDED
+                self.check_engines_btn.text = "Check for Updates"
+                self.engine_status_container.content = self._build_engine_status_content(results)
+                self.update()
+
+                if getattr(self, 'snack_bar', None) in self._page.overlay:
+                    self._page.overlay.remove(self.snack_bar)
+
+                if results.get('has_updates'):
+                    self.snack_bar = ft.SnackBar(
+                        content=ft.Text("Engine updates available! Click 'Update Engines Now' to install.", color=AppTheme.TEXT_PRIMARY),
+                        bgcolor=AppTheme.PRIMARY,
+                        duration=3500
+                    )
+                else:
+                    self.snack_bar = ft.SnackBar(
+                        content=ft.Text("All backend engines are up to date!", color=AppTheme.TEXT_PRIMARY),
+                        bgcolor=AppTheme.SUCCESS,
+                        duration=3000
+                    )
+                self._page.overlay.append(self.snack_bar)
+                self.snack_bar.open = True
+                self._page.update()
+
+            if hasattr(self._page, 'run_thread') and self._page.run_thread:
+                self._page.run_thread(update_ui)
+            else:
+                update_ui()
+
+        import threading
+        threading.Thread(target=run_check, daemon=True).start()
+
+    def _on_update_engines_click(self, e):
+        self.update_engines_btn.disabled = True
+        self.update_engines_btn.icon = ft.Icons.HOURGLASS_TOP_ROUNDED
+        self.update_engines_btn.text = "Updating..."
+        self.update()
+
+        if getattr(self, 'snack_bar', None) in self._page.overlay:
+            self._page.overlay.remove(self.snack_bar)
+        self.snack_bar = ft.SnackBar(
+            content=ft.Text("Updating backend engines in background... Please wait.", color=AppTheme.TEXT_PRIMARY),
+            bgcolor=AppTheme.PRIMARY,
+            duration=4000
+        )
+        self._page.overlay.append(self.snack_bar)
+        self.snack_bar.open = True
+        self._page.update()
+
+        def run_update():
+            success, msg = update_engines()
+            def update_ui():
+                self.update_engines_btn.disabled = False
+                self.update_engines_btn.icon = ft.Icons.UPGRADE_ROUNDED
+                self.update_engines_btn.text = "Update Engines Now"
+                self.engine_status_container.content = self._build_engine_status_content()
+                self.update()
+
+                if getattr(self, 'snack_bar', None) in self._page.overlay:
+                    self._page.overlay.remove(self.snack_bar)
+                self.snack_bar = ft.SnackBar(
+                    content=ft.Text(msg, color=AppTheme.TEXT_PRIMARY),
+                    bgcolor=AppTheme.SUCCESS if success else AppTheme.ERROR,
+                    duration=3500
+                )
+                self._page.overlay.append(self.snack_bar)
+                self.snack_bar.open = True
+                self._page.update()
+
+            if hasattr(self._page, 'run_thread') and self._page.run_thread:
+                self._page.run_thread(update_ui)
+            else:
+                update_ui()
+
+        import threading
+        threading.Thread(target=run_update, daemon=True).start()
+
     def _show_templates_info(self, e):
         templates = [
-            ("%(title)s.%(ext)s", "Default (Title Only)"),
-            ("%(uploader)s - %(title)s.%(ext)s", "Channel Name - Title"),
-            ("%(title)s [%(id)s].%(ext)s", "Title with Video ID"),
-            ("%(upload_date)s - %(title)s.%(ext)s", "Date - Title"),
+            ("%(title)s.%(ext)s", "Default (Title Only)", "Never Gonna Give You Up.mp4"),
+            ("%(uploader)s - %(title)s.%(ext)s", "Channel Name - Title", "Rick Astley - Never Gonna Give You Up.mp4"),
+            ("%(uploader)s - %(title)s [%(resolution)s].%(ext)s", "Channel - Title [Resolution]", "Rick Astley - Video Title [1080p].mp4"),
+            ("%(title)s [%(resolution)s].%(ext)s", "Title with Resolution", "Never Gonna Give You Up [1080p].mp4"),
+            ("%(upload_date)s - %(title)s.%(ext)s", "Date - Title", "20091025 - Never Gonna Give You Up.mp4"),
+            ("%(upload_date)s - %(uploader)s - %(title)s.%(ext)s", "Date - Channel - Title", "20091025 - Rick Astley - Never Gonna Give You Up.mp4"),
+            ("%(title)s [%(id)s].%(ext)s", "Title with Video ID", "Never Gonna Give You Up [dQw4w9WgXcQ].mp4"),
+            ("%(uploader)s - %(title)s [%(id)s].%(ext)s", "Channel - Title with Video ID", "Rick Astley - Never Gonna Give You Up [dQw4w9WgXcQ].mp4"),
+            ("%(uploader)s - %(title)s [%(resolution)s] [%(id)s].%(ext)s", "Channel - Title [Resolution] [ID]", "Rick Astley - Video Title [1080p] [dQw4w9WgXcQ].mp4"),
         ]
-        self._show_templates_dialog(templates, "Filename Templates", self.filename_field)
+        self._show_templates_dialog(
+            templates=templates,
+            title_str="Filename Template Guide",
+            icon=ft.Icons.DESCRIPTION_ROUNDED,
+            target_field=self.filename_field,
+            is_playlist=False,
+        )
 
     def _show_playlist_templates_info(self, e):
         templates = [
-            ("%(playlist_index)s - %(title)s.%(ext)s", "Default (Index - Title)"),
-            ("%(playlist_index)03d - %(title)s.%(ext)s", "Padded Index (001 - Title)"),
-            ("%(playlist)s - %(playlist_index)s - %(title)s.%(ext)s", "Playlist - Index - Title"),
-            ("%(uploader)s - %(playlist_index)s - %(title)s.%(ext)s", "Channel - Index - Title"),
-            ("%(playlist_index)s. %(title)s.%(ext)s", "1. Title"),
+            ("%(playlist_index)s - %(title)s.%(ext)s", "Default (Index - Title)", "1 - Song Title.mp3"),
+            ("%(playlist_index)02d - %(title)s.%(ext)s", "2-Digit Padded Index (01 - Title)", "01 - Song Title.mp3"),
+            ("%(playlist_index)03d - %(title)s.%(ext)s", "3-Digit Padded Index (001 - Title)", "001 - Song Title.mp3"),
+            ("%(playlist_index)02d - %(uploader)s - %(title)s.%(ext)s", "Padded Index - Artist - Title", "01 - Rick Astley - Song Title.mp3"),
+            ("%(playlist)s - %(playlist_index)02d - %(title)s.%(ext)s", "Playlist - Index - Title", "Greatest Hits - 01 - Song Title.mp3"),
+            ("%(uploader)s - %(playlist)s - %(playlist_index)02d - %(title)s.%(ext)s", "Channel - Playlist - Index - Title", "Rick Astley - Greatest Hits - 01 - Song Title.mp3"),
+            ("%(playlist_index)s. %(title)s.%(ext)s", "Dot Numbered (1. Title)", "1. Song Title.mp3"),
+            ("[%(playlist_index)02d] %(title)s.%(ext)s", "Bracketed Index ([01] Title)", "[01] Song Title.mp3"),
         ]
-        self._show_templates_dialog(templates, "Playlist Templates", self.playlist_filename_field)
+        self._show_templates_dialog(
+            templates=templates,
+            title_str="Playlist Template Guide",
+            icon=ft.Icons.PLAYLIST_PLAY_ROUNDED,
+            target_field=self.playlist_filename_field,
+            is_playlist=True,
+        )
 
-    def _show_templates_dialog(self, templates, title_str, target_field):
-        def apply_template(tmpl):
-            target_field.value = tmpl
+    def _show_subtitles_info(self, e):
+        def apply_lang(val):
+            self.sub_lang_field.value = val
+            self._save(None)
             self.update()
-            
             if getattr(self, 'snack_bar', None) in self._page.overlay:
                 self._page.overlay.remove(self.snack_bar)
-                
             self.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Applied format: {tmpl}", color=AppTheme.TEXT_PRIMARY),
+                content=ft.Text(f"Applied subtitle language: {val}", color=AppTheme.TEXT_PRIMARY),
                 bgcolor=AppTheme.SUCCESS,
                 duration=2000
             )
@@ -939,24 +1368,206 @@ class SettingsView(ft.Container):
             self.snack_bar.open = True
             self._close_dialog(dlg)
 
-        content = ft.Column([
-            ft.ListTile(
-                title=ft.Text(t[1], color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.W_600),
-                subtitle=ft.Text(t[0], color=AppTheme.TEXT_SECONDARY),
-                trailing=ft.IconButton(
-                    ft.Icons.CHECK_CIRCLE_ROUNDED, 
-                    icon_color=AppTheme.PRIMARY,
-                    tooltip="Apply", 
-                    on_click=lambda e, tmpl=t[0]: apply_template(tmpl)
+        presets = [
+            ("en", "English", "Default single language track"),
+            ("en, es", "English & Spanish", "Embed both English and Spanish tracks"),
+            ("en, hi", "English & Hindi", "Embed English and Hindi tracks"),
+            ("en, ja", "English & Japanese", "Embed English and Japanese tracks"),
+            ("en, fr, de", "English, French & German", "Embed multiple European language tracks"),
+            ("all", "All Available Subtitles", "Embed every subtitle language available for the video"),
+        ]
+
+        preset_controls = [
+            ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.SUBTITLES_ROUNDED, color=AppTheme.PRIMARY, size=20),
+                    ft.Column([
+                        ft.Text(p[1], color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.W_600, size=13),
+                        ft.Text(f"Code: {p[0]} — {p[2]}", color=AppTheme.TEXT_SECONDARY, size=11),
+                    ], spacing=2, expand=True),
+                    ft.ElevatedButton(
+                        "Apply",
+                        icon=ft.Icons.CHECK_ROUNDED,
+                        style=ft.ButtonStyle(
+                            bgcolor=AppTheme.PRIMARY,
+                            color=AppTheme.TEXT_PRIMARY,
+                            padding=ft.Padding(12, 6, 12, 6),
+                            shape=ft.RoundedRectangleBorder(radius=8),
+                        ),
+                        on_click=lambda e, val=p[0]: apply_lang(val)
+                    )
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
+                padding=ft.Padding(left=12, right=14, top=8, bottom=8),
+                margin=ft.Margin(left=0, right=16, top=0, bottom=0),
+                bgcolor=AppTheme.SURFACE_VARIANT,
+                border_radius=10,
+            )
+            for p in presets
+        ]
+
+        info_box = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Icon(ft.Icons.TIPS_AND_UPDATES_ROUNDED, color=AppTheme.ACCENT, size=18),
+                    ft.Text("How Subtitle Embedding Works", weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY, size=13),
+                ], spacing=6),
+                ft.Text(
+                    "• Multiple Languages: Enter multiple 2-letter codes separated by commas (e.g. en, es, hi). All selected tracks will be embedded into the single video.\n"
+                    "• Download All: Type 'all' to automatically download and embed every available subtitle.\n"
+                    "• Soft Subtitles: Tracks are muxed inside the video container (MKV, MP4) with proper language labels so you can switch languages or turn them off anytime in your video player (VLC, TV, etc.).\n"
+                    "• Common codes: en (English), es (Spanish), hi (Hindi), ja (Japanese), fr (French), de (German), ko (Korean), zh-Hans (Chinese), pt (Portuguese), ru (Russian), ar (Arabic).",
+                    color=AppTheme.TEXT_SECONDARY,
+                    size=12,
                 )
-            ) for t in templates
-        ], tight=True, spacing=0)
-        
+            ], spacing=6),
+            bgcolor=AppTheme.SURFACE_VARIANT,
+            padding=14,
+            border_radius=10,
+            margin=ft.Margin(left=0, right=16, top=0, bottom=0),
+        )
+
+        presets_title = ft.Container(
+            content=ft.Text("Quick Presets (Click Apply):", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY, size=13),
+            margin=ft.Margin(left=2, right=16, top=4, bottom=2),
+        )
+
         dlg = ft.AlertDialog(
-            title=ft.Text(title_str, color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
-            content=content,
+            title=ft.Row([
+                ft.Icon(ft.Icons.SUBTITLES_ROUNDED, color=AppTheme.PRIMARY, size=24),
+                ft.Text("Subtitle Language Guide", color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
+            ], spacing=8),
+            content=ft.Container(
+                content=ft.Column([
+                    info_box,
+                    presets_title,
+                    *preset_controls
+                ], spacing=8, scroll=ft.ScrollMode.AUTO),
+                width=540,
+                height=440,
+            ),
             bgcolor=AppTheme.SURFACE,
-            shape=ft.RoundedRectangleBorder(radius=10),
+            shape=ft.RoundedRectangleBorder(radius=12),
+            actions=[
+                ft.TextButton("Close", on_click=lambda e: self._close_dialog(dlg))
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self._page.overlay.append(dlg)
+        dlg.open = True
+        self._page.update()
+
+    def _show_templates_dialog(self, templates, title_str, icon, target_field, is_playlist=False):
+        def apply_template(tmpl):
+            target_field.value = tmpl
+            self._save(None)
+            self.update()
+            
+            if getattr(self, 'snack_bar', None) in self._page.overlay:
+                self._page.overlay.remove(self.snack_bar)
+                
+            self.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Applied template: {tmpl}", color=AppTheme.TEXT_PRIMARY),
+                bgcolor=AppTheme.SUCCESS,
+                duration=2000
+            )
+            self._page.overlay.append(self.snack_bar)
+            self.snack_bar.open = True
+            self._close_dialog(dlg)
+
+        preset_controls = [
+            ft.Container(
+                content=ft.Row([
+                    ft.Icon(icon, color=AppTheme.PRIMARY, size=20),
+                    ft.Column([
+                        ft.Text(t[1], color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.W_600, size=13),
+                        ft.Text(f"Format: {t[0]}", color=AppTheme.ACCENT, size=11, weight=ft.FontWeight.W_500),
+                        ft.Text(f"Example: {t[2]}", color=AppTheme.TEXT_SECONDARY, size=11),
+                    ], spacing=2, expand=True),
+                    ft.ElevatedButton(
+                        "Apply",
+                        icon=ft.Icons.CHECK_ROUNDED,
+                        style=ft.ButtonStyle(
+                            bgcolor=AppTheme.PRIMARY,
+                            color=AppTheme.TEXT_PRIMARY,
+                            padding=ft.Padding(12, 6, 12, 6),
+                            shape=ft.RoundedRectangleBorder(radius=8),
+                        ),
+                        on_click=lambda e, tmpl=t[0]: apply_template(tmpl)
+                    )
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
+                padding=ft.Padding(left=12, right=14, top=8, bottom=8),
+                margin=ft.Margin(left=0, right=16, top=0, bottom=0),
+                bgcolor=AppTheme.SURFACE_VARIANT,
+                border_radius=10,
+            )
+            for t in templates
+        ]
+
+        if is_playlist:
+            info_text = (
+                "• How Playlist Templates Work: Customize how files in playlists, albums, and series are named automatically.\n"
+                "• Essential Playlist Tags:\n"
+                "  - %(playlist_index)s : Track position / order (e.g. 1, 2, 3...)\n"
+                "  - %(playlist_index)02d : Padded 2-digit number (e.g. 01, 02, 03...)\n"
+                "  - %(playlist_index)03d : Padded 3-digit number (e.g. 001, 002...)\n"
+                "  - %(playlist)s : Name of the playlist, album, or series\n"
+                "  - %(title)s : Video or track title\n"
+                "  - %(uploader)s : Channel or artist name\n"
+                "  - %(ext)s : Output extension (mp4, mkv, mp3)\n"
+                "• Tip: Padded numbers like %(playlist_index)02d keep your tracks in exact chronological order in Windows File Explorer!"
+            )
+        else:
+            info_text = (
+                "• How Filename Templates Work: Templates let you automatically name downloaded files using dynamic tags enclosed in %(tag)s.\n"
+                "• Supported Tags:\n"
+                "  - %(title)s : Video or audio title\n"
+                "  - %(uploader)s : Channel, creator, or artist name\n"
+                "  - %(upload_date)s : Published date in YYYYMMDD format (e.g. 20240115)\n"
+                "  - %(resolution)s : Video resolution (e.g. 1080p, 720p, 4k)\n"
+                "  - %(id)s : Unique platform video ID (e.g. dQw4w9WgXcQ)\n"
+                "  - %(ext)s : Media file extension (mp4, mkv, mp3, flac)\n"
+                "• Tip: You can type custom text, separators (e.g. hyphens, underscores, brackets), or any combination directly in the filename field!"
+            )
+
+        info_box = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Icon(ft.Icons.TIPS_AND_UPDATES_ROUNDED, color=AppTheme.ACCENT, size=18),
+                    ft.Text("How Filename Templates Work", weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY, size=13),
+                ], spacing=6),
+                ft.Text(
+                    info_text,
+                    color=AppTheme.TEXT_SECONDARY,
+                    size=12,
+                )
+            ], spacing=6),
+            bgcolor=AppTheme.SURFACE_VARIANT,
+            padding=14,
+            border_radius=10,
+            margin=ft.Margin(left=0, right=16, top=0, bottom=0),
+        )
+
+        presets_title = ft.Container(
+            content=ft.Text("Popular Presets (Click Apply):", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY, size=13),
+            margin=ft.Margin(left=2, right=16, top=4, bottom=2),
+        )
+
+        dlg = ft.AlertDialog(
+            title=ft.Row([
+                ft.Icon(icon, color=AppTheme.PRIMARY, size=24),
+                ft.Text(title_str, color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
+            ], spacing=8),
+            content=ft.Container(
+                content=ft.Column([
+                    info_box,
+                    presets_title,
+                    *preset_controls
+                ], spacing=8, scroll=ft.ScrollMode.AUTO),
+                width=560,
+                height=460,
+            ),
+            bgcolor=AppTheme.SURFACE,
+            shape=ft.RoundedRectangleBorder(radius=12),
             actions=[
                 ft.TextButton("Close", on_click=lambda e: self._close_dialog(dlg))
             ],
@@ -993,10 +1604,19 @@ class SettingsView(ft.Container):
 
         self.settings.set('embed_thumbnail', self.embed_thumbnail_switch.value)
         self.settings.set('embed_metadata', self.embed_metadata_switch.value)
+        self.settings.set('embed_chapters', self.embed_chapters_switch.value)
         self.settings.set('embed_subtitles', self.embed_subs_switch.value)
         self.settings.set('auto_subtitle_lang', self.sub_lang_field.value.strip() or 'en')
         self.settings.set('browser_cookies', self.browser_cookies_dropdown.value)
         self.settings.set('cookies_path', self.cookies_path_field.value)
+        
+        self.settings.set('enable_sponsorblock', self.sponsorblock_switch.value)
+        self.settings.set('sponsorblock_action', self.sponsorblock_action_dropdown.value)
+        selected_sb_cats = [cid for cid, cb in self.sponsorblock_cat_checkboxes.items() if cb.value]
+        self.settings.set('sponsorblock_categories', selected_sb_cats)
+        
+        if hasattr(self, 'engine_interval_dropdown') and self.engine_interval_dropdown.value:
+            self.settings.set('engine_update_interval', self.engine_interval_dropdown.value)
         
         self.settings.save()
 
@@ -1017,6 +1637,8 @@ class SettingsView(ft.Container):
         self.speed_limit_field.value = str(int(speed / 1024)) if speed else "0"
         self.embed_thumbnail_switch.value = self.settings.get('embed_thumbnail')
         self.embed_metadata_switch.value = self.settings.get('embed_metadata', True)
+        if hasattr(self, 'embed_chapters_switch'):
+            self.embed_chapters_switch.value = self.settings.get('embed_chapters', True)
         self.embed_subs_switch.value = self.settings.get('embed_subtitles')
         self.sub_lang_field.value = self.settings.get('auto_subtitle_lang')
         self.browser_cookies_dropdown.value = self.settings.get('browser_cookies')
@@ -1024,6 +1646,18 @@ class SettingsView(ft.Container):
         self.theme_segmented.selected = [self.settings.get('theme', 'dark')]
         if hasattr(self, 'dev_mode_switch'):
             self.dev_mode_switch.value = self.settings.get('developer_mode', False)
+        if hasattr(self, 'sponsorblock_switch'):
+            is_sb = self.settings.get('enable_sponsorblock', False)
+            self.sponsorblock_switch.value = is_sb
+            self.sponsorblock_action_dropdown.value = self.settings.get('sponsorblock_action', 'remove')
+            self.sponsorblock_action_dropdown.disabled = not is_sb
+            saved_cats = self.settings.get('sponsorblock_categories', ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro'])
+            for cid, cb in self.sponsorblock_cat_checkboxes.items():
+                cb.value = (cid in saved_cats)
+                cb.disabled = not is_sb
+            self.sponsorblock_options_container.opacity = 1.0 if is_sb else 0.4
+        if hasattr(self, 'engine_interval_dropdown'):
+            self.engine_interval_dropdown.value = self.settings.get('engine_update_interval', 'weekly')
         try:
             self.update()
         except:

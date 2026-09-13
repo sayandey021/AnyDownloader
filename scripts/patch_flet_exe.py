@@ -15,9 +15,17 @@ def patch_flet_exe():
         local_flet_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".flet_view"))
         
         # Copy to local workspace to avoid modifying the global Flet installation
-        if os.path.exists(local_flet_dir):
-            shutil.rmtree(local_flet_dir)
-        shutil.copytree(global_flet_dir, local_flet_dir)
+        if not os.path.exists(local_flet_dir):
+            shutil.copytree(global_flet_dir, local_flet_dir)
+        else:
+            # If local_flet_dir already exists, check if flet.exe is present
+            flet_exe_candidate = os.path.join(local_flet_dir, 'flet', 'flet.exe')
+            if not os.path.exists(flet_exe_candidate):
+                try:
+                    shutil.rmtree(local_flet_dir)
+                    shutil.copytree(global_flet_dir, local_flet_dir)
+                except Exception as e:
+                    print(f"Notice: Using existing .flet_view ({e})")
         
         # flet-desktop-full-x.y.z/flet/flet.exe -> .flet_view/flet/flet.exe
         flet_exe = os.path.join(local_flet_dir, 'flet', 'flet.exe')

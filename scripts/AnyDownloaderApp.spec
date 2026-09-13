@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['..\\main.py'],
+    ['../main.py'],
     pathex=[],
     binaries=[],
-    datas=[('..\\assets', 'assets'), ('C:\\Users\\sayan\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\ytmusicapi\\locales', 'ytmusicapi/locales')],
+    datas=[('../assets', 'assets'), ('C:/Users/sayan/AppData/Roaming/Python/Python312/site-packages/ytmusicapi/locales', 'ytmusicapi/locales')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,6 +35,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    version='C:\\Users\\sayan\\AppData\\Local\\Temp\\b1358665-0996-42da-a4ac-338bd4e62e74',
-    icon=['..\\assets\\icon.ico'],
+    version='C:/Users/sayan/AppData/Local/Temp/816d15f9-c24b-4691-bd31-72a1d03f0a82',
+    icon=['../assets/icon.ico'],
 )
