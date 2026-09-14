@@ -4,7 +4,56 @@ Welcome to the **Any Downloader** release notes! Below is a comprehensive change
 
 ---
 
-## **v1.9.0 - SponsorBlock & Backend Engines Update** *(Current)*
+## **v1.9.2 - History Tab & Settings Quality Fixes** *(Current)*
+
+### 🐛 Bug Fixes
+- **History Tab Notification Count Badge Removal**:
+  - Removed the notification count badge pill next to the "History" tab title for a cleaner, distraction-free header layout.
+- **Settings Console Window Flashing Fix**:
+  - Eliminated the brief black terminal/command prompt window popup when navigating to Settings or changing options by:
+    - Installing a global silent `subprocess.Popen` hook on Windows with `CREATE_NO_WINDOW` and `SW_HIDE` flags.
+    - Optimizing backend engine version discovery via `importlib.metadata` to query package versions instantly without heavy imports or background subprocesses.
+    - Adding explicit `CREATE_NO_WINDOW` flags to diagnostic and Explorer process invocations.
+
+---
+
+## **v1.9.1 - Custom Title Bar & History Tab Overhaul**
+
+### ✨ New Features
+- **Custom Frameless Title Bar**:
+  - Replaced the default Windows OS title bar with a custom, frameless title bar matching the app's dark/light aesthetics.
+  - Native window dragging with `WindowDragArea` and double-click to maximize/restore.
+  - Custom minimize, maximize/restore, and close buttons featuring smooth Windows 11-style hover animations and red close highlight.
+  - Dynamic color integration that immediately updates when switching light/dark themes or accent colors.
+- **History Tab 2-Column Grid Redesign**:
+  - Completely revamped the History tab from a single list into a modern, responsive 2-column card grid.
+  - **16:9 Thumbnail Cards**: Letterboxed thumbnail previews with rounded corners and media-aware fallback icons (music note for audio, video screen for video).
+  - **Clean Metadata Line**: Each card displays detailed format, resolution/quality, and size tags (e.g. `MP4 • 480p30 • 13.48 MB` or `YouTube • 2 hours ago`).
+  - **Filtering**: Added a segmented filter toggle (**All**, **Downloads**, **Searches**) to seamlessly switch between full history, completed downloads, or search entries.
+  - **Direct Card Launch**: Clicking any completed download card directly opens the file in your default media player.
+- **Enhanced Context / Options Menu**:
+  - Upgraded the 3-dots options menu into an elevated floating card menu with rounded borders (`radius=12`) and shadow separation.
+  - Color-coded icons for each action: Green Play for *Open File*, Accent for *Show in Folder*, Primary for *Search Again*, Sky Cyan for *Copy Link*, and Gray for *Open in Browser*.
+  - Destructive *Remove from History* action styled in red warning color and separated by a subtle divider.
+- **Unified Close Application Dialog Aesthetics**:
+  - Modernized the close application popup to match the app's established design system with theme surface background (`AppTheme.SURFACE`), rounded borders (`radius=12`), header icon, styled checkbox, and dynamic runtime theme syncing.
+  - Replaced plain text buttons with a prominent filled primary button for *Minimize to Tray*, danger styling for *Exit App*, and clean neutral styling for *Cancel*.
+- **Taskbar & App Icon Injection**:
+  - Patched packaging scripts (`custom_pack.py`, `patch_flet_exe.py`, `build_msix.ps1`) using `rcedit` to inject `icon.ico` directly into the bundled Flutter `flet.exe` binaries, ensuring the custom app icon displays properly in the Windows Taskbar and Alt+Tab switcher.
+
+### ⚡ Performance Optimizations
+- **Instant Tab Switching (< 0.01 ms)**:
+  - Implemented dirty tracking (`_history_dirty`) and in-memory pre-rendering so switching between Search, History, and Downloads is instantaneous with zero freeze.
+  - Added file size in-memory caching (`_filesize_cache`) to eliminate redundant synchronous disk I/O on repeated views.
+
+### 🐛 Bug Fixes
+- **Scrollbar Overlap Fix**: Added dedicated 16px gutter spacing on history cards so the vertical scrollbar no longer overlaps the card border or action buttons.
+- **Title Bar Persistence on Theme Change**: Fixed an issue where changing the theme or accent color in Settings caused the custom title bar to disappear.
+- **Flet 0.86 Compatibility**: Resolved `ft.Border.all` PascalCase factory requirement, updated `PopupMenuItem` to use `content` instead of `text`, and migrated `ElevatedButton` to `FilledButton`.
+
+---
+
+## **v1.9.0 - SponsorBlock & Backend Engines Update**
 
 ### ✨ New Features
 - **SponsorBlock Integration**: Integrated native SponsorBlock support for YouTube video and audio downloads. Automatically detects and handles sponsored segments, self-promotions, interaction reminders, intros, outros, previews, and music off-topic sections.
@@ -22,6 +71,7 @@ Welcome to the **Any Downloader** release notes! Below is a comprehensive change
 - **Manual Engine Check & One-Click Upgrade**: Added status card displaying installed vs latest PyPI versions for each engine, along with a "Check for Updates" button and a one-click "Update Engines Now" pip updater.
 - **Modern Fluent UI & Dropdown Redesign**: Completely overhauled dropdown menus with modern rounded shapes, surface hover animations, and improved contrast.
 - **Expanded Filename & Playlist Template Guides**: Added real-world examples, explanations of dynamic format tags, and one-click preset apply cards inside the Settings template guide modals.
+- **Upgraded Flet UI Framework to v0.86.5**: Migrated Any Downloader to the latest Flet 0.86.5 runtime with modern async window management, refreshed Flutter desktop client runtimes, and updated build tooling.
 
 ---
 

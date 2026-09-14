@@ -1,7 +1,5 @@
 import flet as ft
 from src.ui.theme import AppTheme
-import tkinter as tk
-from tkinter import filedialog
 import os
 
 class FetchDialog(ft.AlertDialog):

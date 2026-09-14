@@ -1,6 +1,38 @@
 import sys
 import os
 import subprocess
+import ctypes
+from ctypes import wintypes
+
+# Suppress visible terminal/cmd console flashing for any background subprocesses on Windows
+if sys.platform == "win32":
+    _orig_popen = subprocess.Popen
+
+    class _SilentPopen(_orig_popen):
+        def __init__(self, *args, **kwargs):
+            # Do not force CREATE_NO_WINDOW on flet.exe GUI client
+            cmd_args = args[0] if args else kwargs.get("args")
+            is_flet = False
+            if cmd_args:
+                first_arg = cmd_args[0] if isinstance(cmd_args, (list, tuple)) else str(cmd_args)
+                if "flet.exe" in str(first_arg).lower():
+                    is_flet = True
+
+            if not is_flet:
+                creationflags = kwargs.get("creationflags", 0)
+                creationflags |= subprocess.CREATE_NO_WINDOW
+                kwargs["creationflags"] = creationflags
+
+                startupinfo = kwargs.get("startupinfo")
+                if startupinfo is None:
+                    startupinfo = subprocess.STARTUPINFO()
+                    kwargs["startupinfo"] = startupinfo
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0  # SW_HIDE
+
+            super().__init__(*args, **kwargs)
+
+    subprocess.Popen = _SilentPopen
 
 def _ensure_dependencies():
     if getattr(sys, 'frozen', False):
@@ -31,8 +63,6 @@ from PIL import Image
 import pystray
 
 def kill_child_flet():
-    import os
-    import subprocess
     try:
         cmd = f'wmic process where "ParentProcessId={os.getpid()} and Name=\'flet.exe\'" get ProcessId'
         output = subprocess.check_output(cmd, shell=True, text=True, creationflags=0x08000000)
@@ -43,38 +73,46 @@ def kill_child_flet():
     except Exception:
         pass
 
-# BUST THE WINDOWS TASKBAR CACHE!
-# Flet automatically sets FLET_APP_USER_MODEL_ID to the PyInstaller executable path.
-# Because you ran it before the metadata was fixed, Windows permanently cached the Flet icon
-# for this exact executable path. We will change the AUMID string so Windows thinks this
-# is a completely brand new application and re-reads the (now perfect) metadata and icon!
+def get_msix_aumid():
+    if sys.platform != "win32":
+        return None
+    try:
+        kernel32 = ctypes.windll.kernel32
+        length = ctypes.c_uint32(0)
+        kernel32.GetCurrentPackageFamilyName(ctypes.byref(length), None)
+        if length.value > 0:
+            name_buffer = ctypes.create_unicode_buffer(length.value)
+            if kernel32.GetCurrentPackageFamilyName(ctypes.byref(length), name_buffer) == 0:
+                return f"{name_buffer.value}!AnyDownloader"
+    except Exception:
+        pass
+    return None
+
+def get_app_user_model_id():
+    msix_id = get_msix_aumid()
+    if msix_id:
+        return msix_id
+    return "SwiftGrab.AnyDownloader.App"
+
 def configure_flet_runtime():
-    if getattr(sys, 'frozen', False):
-        # 1. Bust the taskbar cache
-        new_aumid = os.path.abspath(sys.executable) + "_v4"
-        os.environ["FLET_APP_USER_MODEL_ID"] = new_aumid
+    if sys.platform == "win32":
+        aumid = get_app_user_model_id()
+        os.environ["FLET_APP_USER_MODEL_ID"] = aumid
         try:
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(new_aumid)
-        except:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(aumid)
+        except Exception:
             pass
-            
-        # 2. Force Flet to use our patched bundled flet.exe!
-        # The flet pack command compresses the patched flet/ directory into
-        # flet-windows.zip inside _MEIPASS/flet_desktop/app/. At runtime,
-        # flet falls back to the global ~/.flet/client/ cache which has
-        # unpatched Flet branding. We extract the bundled zip ourselves into
-        # a writable app-data directory so the patched version is always used.
+
+    if getattr(sys, 'frozen', False):
+        # Force Flet to use our patched bundled flet.exe!
         import zipfile
         bundled_zip = os.path.join(sys._MEIPASS, "flet_desktop", "app", "flet-windows.zip")
-        # Extract to ~/.AnyDownloader instead of LOCALAPPDATA to avoid MSIX VFS bugs
-        # where Windows fails to load dependent DLLs (like connectivity_plus_plugin.dll)
         extract_dir = os.path.join(os.path.expanduser("~"), ".AnyDownloader", "flet_view")
         flet_exe = os.path.join(extract_dir, "flet", "flet.exe")
-        # Re-extract if the packaged executable is newer (new build) or not yet extracted
-        needs_extract = not os.path.isfile(flet_exe)
         version_file = os.path.join(extract_dir, "version.txt")
         current_version = str(os.path.getmtime(sys.executable)) if os.path.isfile(sys.executable) else "unknown"
         
+        needs_extract = not os.path.isfile(flet_exe)
         if not needs_extract:
             cached_version = ""
             if os.path.isfile(version_file):
@@ -96,17 +134,71 @@ def configure_flet_runtime():
                 with open(version_file, "w") as f:
                     f.write(current_version)
             except Exception as e:
-                # If extraction fails (e.g. PermissionError because another instance is running),
-                # we just continue. The existing flet.exe and DLLs are already there.
                 print(f"Warning: Failed to extract flet client (might be in use): {e}")
         
         if os.path.isfile(flet_exe):
             os.environ["FLET_VIEW_PATH"] = os.path.join(extract_dir, "flet")
         else:
-            # Fallback: try uncompressed path (shouldn't happen with current build)
             os.environ["FLET_VIEW_PATH"] = os.path.join(sys._MEIPASS, "flet_desktop", "app", "flet")
 
+def apply_native_window_styling(window_title="Any Downloader", icon_path=None, dark=True):
+    if sys.platform != "win32":
+        return
+
+    def _worker():
+        import time
+        user32 = ctypes.windll.user32
+        dwmapi = ctypes.windll.dwmapi
+        
+        hwnd = None
+        for _ in range(40):
+            hwnd = user32.FindWindowW(None, window_title)
+            if hwnd:
+                break
+            time.sleep(0.08)
+
+        if not hwnd:
+            return
+
+        # 1. Windows 10/11 title bar dark mode
+        try:
+            val = ctypes.c_int(1 if dark else 0)
+            if dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), ctypes.sizeof(val)) != 0:
+                dwmapi.DwmSetWindowAttribute(hwnd, 19, ctypes.byref(val), ctypes.sizeof(val))
+        except Exception:
+            pass
+
+        # 2. Native Win32 window icons (Titlebar small icon + Taskbar big icon)
+        if icon_path and os.path.exists(icon_path):
+            try:
+                WM_SETICON = 0x0080
+                ICON_SMALL = 0
+                ICON_BIG = 1
+                IMAGE_ICON = 1
+                LR_LOADFROMFILE = 0x0010
+
+                h_sm = user32.LoadImageW(None, icon_path, IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
+                if h_sm:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, h_sm)
+                    try:
+                        user32.SetClassLongPtrW(hwnd, -34, h_sm)  # GCLP_HICONSM
+                    except Exception:
+                        pass
+
+                h_bg = user32.LoadImageW(None, icon_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
+                if h_bg:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_bg)
+                    try:
+                        user32.SetClassLongPtrW(hwnd, -14, h_bg)  # GCLP_HICON
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+    threading.Thread(target=_worker, daemon=True).start()
+
 configure_flet_runtime()
+
 
 # In development mode, use the patched .flet_view so the taskbar shows
 # the correct app icon and name instead of the default Flet branding.
@@ -121,6 +213,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.ui.theme import AppTheme
 from src.ui.main_view import MainView
+from src.ui.title_bar import CustomTitleBar
 from src.backend.settings import SettingsManager
 
 tray_icon = None
@@ -168,23 +261,32 @@ def minimize_to_tray(page: ft.Page):
     page.window.visible = False
     page.update()
 
-def main(page: ft.Page):
+async def main(page: ft.Page):
+    def _safe_destroy_window():
+        try:
+            page.run_task(page.window.destroy)
+        except Exception:
+            try:
+                page.window.destroy()
+            except Exception:
+                pass
+
     # Setup thread-safe pubsub receiver for tray events
     def on_tray_message(msg):
         if msg == "show_window":
             page.window.visible = True
             page.update()
             page.window.minimized = False
-            page.window.to_front()
-            page.window.focus()
+            page.window.focused = True
+            try:
+                page.run_task(page.window.to_front)
+            except Exception:
+                pass
             page.update()
         elif msg == "exit_app":
             page.window.on_event = None
             page.window.prevent_close = False
-            try:
-                page.window.destroy()
-            except Exception:
-                pass
+            _safe_destroy_window()
             
             # Allow time for Flet to gracefully close flet.exe process
             def _fallback():
@@ -199,15 +301,27 @@ def main(page: ft.Page):
     settings = SettingsManager()
     AppTheme.apply()  # Load saved theme (dark/light) before building UI
 
+    if getattr(sys, 'frozen', False):
+        assets_dir = os.path.join(sys._MEIPASS, "assets")
+    else:
+        assets_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
+    icon_ico_path = os.path.join(assets_dir, "icon.ico")
+
     page.title = "Any Downloader"
-    page.window.icon = "icon.ico"
+    page.window.icon = icon_ico_path if os.path.exists(icon_ico_path) else "icon.ico"
+    page.window.brightness = ft.Brightness.DARK if AppTheme.MODE == 'dark' else ft.Brightness.LIGHT
     page.width = 900
     page.height = 700
     page.theme = AppTheme.get_theme()
     page.theme_mode = ft.ThemeMode.LIGHT if AppTheme.MODE == 'light' else ft.ThemeMode.DARK
     page.bgcolor = AppTheme.BACKGROUND
+    page.window.bgcolor = AppTheme.BACKGROUND
     page.padding = 0
     page.window.prevent_close = True
+    page.window.title_bar_hidden = True
+    page.window.visible = False
+
+    apply_native_window_styling("Any Downloader", icon_ico_path, dark=(AppTheme.MODE == 'dark'))
 
     # Start tray icon immediately
     threading.Thread(target=setup_tray, args=(page,), daemon=True).start()
@@ -220,10 +334,7 @@ def main(page: ft.Page):
                     tray_icon.stop()
                 except Exception:
                     pass
-            try:
-                page.window.destroy()
-            except Exception:
-                pass
+            _safe_destroy_window()
             import time
             time.sleep(1.0)  # Wait for flet.exe to gracefully exit
             kill_child_flet()
@@ -251,7 +362,17 @@ def main(page: ft.Page):
             page.update()
             force_exit_app()
 
-    remember_checkbox = ft.Checkbox(label="Remember my choice", value=False)
+    close_icon = ft.Icon(ft.Icons.EXIT_TO_APP_ROUNDED, color=AppTheme.PRIMARY, size=22)
+    close_title_text = ft.Text("Close Application", weight=ft.FontWeight.BOLD, color=AppTheme.TEXT_PRIMARY, size=18)
+    prompt_text = ft.Text("Do you want to minimize to the system tray or exit the application?", color=AppTheme.TEXT_SECONDARY, size=14)
+
+    remember_checkbox = ft.Checkbox(
+        label="Remember my choice",
+        value=False,
+        active_color=AppTheme.PRIMARY,
+        check_color=ft.Colors.WHITE,
+        label_style=ft.TextStyle(color=AppTheme.TEXT_SECONDARY, size=13),
+    )
     
     def on_minimize(e):
         close_dialog.open = False
@@ -269,56 +390,96 @@ def main(page: ft.Page):
         close_dialog.open = False
         page.update()
 
+    cancel_btn = ft.TextButton("Cancel", on_click=on_cancel, style=ft.ButtonStyle(color=AppTheme.TEXT_SECONDARY))
+    exit_btn = ft.TextButton("Exit App", on_click=on_exit, icon=ft.Icons.POWER_SETTINGS_NEW_ROUNDED, style=ft.ButtonStyle(color=AppTheme.ERROR))
+    minimize_btn = ft.FilledButton(
+        "Minimize to Tray",
+        icon=ft.Icons.MOVE_TO_INBOX_ROUNDED,
+        style=ft.ButtonStyle(
+            bgcolor=AppTheme.PRIMARY,
+            color=ft.Colors.WHITE,
+            shape=ft.RoundedRectangleBorder(radius=8),
+        ),
+        on_click=on_minimize,
+    )
+
     close_dialog = ft.AlertDialog(
         modal=True,
-        title=ft.Text("Close Application"),
-        content=ft.Column([
-            ft.Text("Do you want to minimize to the system tray or exit the application?"),
-            remember_checkbox
-        ], tight=True),
+        title=ft.Row([close_icon, close_title_text], spacing=10),
+        content=ft.Container(
+            content=ft.Column([
+                prompt_text,
+                ft.Container(height=4),
+                remember_checkbox
+            ], tight=True, spacing=10),
+            width=460,
+        ),
+        bgcolor=AppTheme.SURFACE,
+        shape=ft.RoundedRectangleBorder(radius=12),
         actions=[
-            ft.TextButton("Minimize to Tray", on_click=on_minimize),
-            ft.TextButton("Exit App", on_click=on_exit, style=ft.ButtonStyle(color=ft.Colors.ERROR)),
-            ft.TextButton("Cancel", on_click=on_cancel)
-        ]
+            cancel_btn,
+            exit_btn,
+            minimize_btn,
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
     )
     
     page.overlay.append(close_dialog)
 
+    def request_close(e=None):
+        ask_on_close = settings.get('ask_on_close', True)
+        close_behavior = settings.get('close_behavior', 'prompt')
+        
+        if not ask_on_close:
+            if close_behavior == 'tray':
+                minimize_to_tray(page)
+            else:
+                page.window.on_event = None
+                page.window.prevent_close = False
+                page.window.visible = False
+                page.update()
+                force_exit_app()
+            return
+            
+        print("Showing close dialog...")
+        close_dialog.bgcolor = AppTheme.SURFACE
+        close_icon.color = AppTheme.PRIMARY
+        close_title_text.color = AppTheme.TEXT_PRIMARY
+        prompt_text.color = AppTheme.TEXT_SECONDARY
+        remember_checkbox.active_color = AppTheme.PRIMARY
+        remember_checkbox.label_style = ft.TextStyle(color=AppTheme.TEXT_SECONDARY, size=13)
+        cancel_btn.style = ft.ButtonStyle(color=AppTheme.TEXT_SECONDARY)
+        exit_btn.style = ft.ButtonStyle(color=AppTheme.ERROR)
+        minimize_btn.style = ft.ButtonStyle(
+            bgcolor=AppTheme.PRIMARY,
+            color=ft.Colors.WHITE,
+            shape=ft.RoundedRectangleBorder(radius=8),
+        )
+        remember_checkbox.value = False
+        close_dialog.open = True
+        page.update()
+
+    title_bar = CustomTitleBar(page, on_close_click=request_close)
+    page.custom_title_bar = title_bar
+
     def window_event(e):
-        # Handle different Flet versions event data
-        event_val = getattr(e, "type", getattr(e, "data", ""))
+        event_val = str(getattr(e, "type", getattr(e, "data", ""))).lower()
         print(f"[WINDOW EVENT] data={getattr(e, 'data', None)} type={getattr(e, 'type', None)} event_val={event_val}")
         
-        if str(event_val) == "close" or "close" in str(event_val).lower():
-            ask_on_close = settings.get('ask_on_close', True)
-            close_behavior = settings.get('close_behavior', 'prompt')
-            
-            if not ask_on_close:
-                if close_behavior == 'tray':
-                    minimize_to_tray(page)
-                else:
-                    page.window.on_event = None
-                    page.window.prevent_close = False
-                    page.window.visible = False
-                    page.update()
-                    force_exit_app()
-                return
-                
-            print("Showing close dialog...")
-            remember_checkbox.value = False
-            close_dialog.open = True
+        if "close" in event_val:
+            request_close()
+            return
+        elif any(k in event_val for k in ("max", "restore", "unmax")):
+            title_bar.update_maximize_state(page.window.maximized)
             page.update()
 
     page.window.on_event = window_event
-    page.update()
-
 
     from src.backend.ffmpeg_manager import is_ffmpeg_available, download_ffmpeg
 
     if is_ffmpeg_available():
         main_view = MainView(page)
-        page.add(main_view)
+        page.add(ft.Column([title_bar, main_view], spacing=0, expand=True))
 
         # Scheduled backend engine update check (daily, weekly, monthly)
         def _check_engine_updates_startup():
@@ -370,7 +531,7 @@ def main(page: ft.Page):
             ),
             expand=True,
         )
-        page.add(loading_view)
+        page.add(ft.Column([title_bar, loading_view], spacing=0, expand=True))
         
         def update_progress(percent, text):
             progress_bar.value = percent / 100.0 if percent > 0 else None
@@ -409,7 +570,7 @@ def main(page: ft.Page):
                     ),
                     expand=True,
                 )
-                page.add(restart_view)
+                page.add(ft.Column([title_bar, restart_view], spacing=0, expand=True))
                 page.update()
             except Exception as e:
                 status_text.value = f"Failed to download FFmpeg: {e}\nPlease restart the app or install FFmpeg manually."
@@ -420,33 +581,13 @@ def main(page: ft.Page):
                 
         threading.Thread(target=download_task, daemon=True).start()
 
+    try:
+        await page.window.wait_until_ready_to_show()
+    except Exception:
+        pass
     page.window.visible = True
     page.update()
 if __name__ == "__main__":
-    import ctypes
-    def get_msix_aumid():
-        try:
-            kernel32 = ctypes.windll.kernel32
-            length = ctypes.c_uint32(0)
-            kernel32.GetCurrentPackageFamilyName(ctypes.byref(length), None)
-            if length.value > 0:
-                name_buffer = ctypes.create_unicode_buffer(length.value)
-                if kernel32.GetCurrentPackageFamilyName(ctypes.byref(length), name_buffer) == 0:
-                    # Append the Application Id defined in AppxManifest.xml
-                    return f"{name_buffer.value}!AnyDownloader"
-        except Exception:
-            pass
-        return None
-
-    try:
-        msix_aumid = get_msix_aumid()
-        # If running from MSIX, use a slightly modified AUMID to break cache.
-        # If running raw EXE, use a hardcoded AUMID to break path-based cache.
-        final_aumid = f"{msix_aumid}_v1" if msix_aumid else "SwiftGrab.AnyDownloader.App.v1"
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(final_aumid)
-    except Exception:
-        pass
-
     # Redirect stdout/stderr to log file ONLY when packaged as an executable.
     # In development mode (python main.py), print everything directly to the terminal.
     if getattr(sys, 'frozen', False):
@@ -466,4 +607,4 @@ if __name__ == "__main__":
     print(f"Assets dir resolved to: {assets_dir}")
     print(f"Does icon.png exist? {os.path.exists(os.path.join(assets_dir, 'icon.png'))}")
     
-    ft.app(target=main, assets_dir=assets_dir, view=ft.AppView.FLET_APP_HIDDEN)
+    ft.run(main, assets_dir=assets_dir, view=ft.AppView.FLET_APP_HIDDEN)

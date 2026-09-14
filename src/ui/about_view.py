@@ -34,7 +34,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.9.0", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.9.2", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         
@@ -90,7 +90,13 @@ class AboutView(ft.Container):
 
         def _show_version_history(e):
             changelog_content = ft.Column([
-                ft.Text("v1.9.0 (Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("v1.9.2 (Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Removed notification count badge from History header for a clean, distraction-free view.\n• Fixed console window flashing on Windows when switching to/inside Settings by wrapping subprocess with CREATE_NO_WINDOW and SW_HIDE flags.\n• Optimized backend engine version checking using fast in-memory importlib metadata.", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.9.1", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Custom frameless Title Bar with native dragging, Windows 11-style controls, and dynamic theme integration.\n• Overhauled History tab to a responsive 2-column card grid with 16:9 thumbnails and metadata tags.\n• Enhanced floating context menu with color-coded actions and safety divider.\n• Instant tab-switching (< 0.01ms) with in-memory caching and dirty tracking.\n• Injected custom app icon into flet.exe for proper Windows taskbar and Alt+Tab display.\n• Fixed scrollbar overlap and title bar persistence bugs.", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.9.0", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
                 ft.Text("• Backend Engines & Dependencies updater (yt-dlp, spotdl, curl_cffi) with auto-check schedule (daily, weekly, monthly, manual).\n• SponsorBlock integration for YouTube: automatically cut or mark sponsors, intros, promos, and more.\n• Granular SponsorBlock category selection with quick presets.\n• Save with Chapters: option to preserve and embed chapter markers in downloads.\n• Inline SponsorBlock toggle in Fetch Dialog for instant per-download control.\n• Added new General settings tab; cleanly moved normal options from Advanced.\n• Multi-subtitle embedding: specify multiple languages (e.g. en, es, hi) or 'all' to embed multiple subtitle tracks.\n• Modern rounded Fluent UI & dropdown redesign with interactive template guides.", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Divider(color=AppTheme.SURFACE_VARIANT),
                 ft.Text("v1.8.3", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),

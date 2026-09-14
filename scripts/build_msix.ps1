@@ -1,12 +1,12 @@
 # build_msix.ps1
 # This script packages the Flet executable into an MSIX file and signs it with a self-signed certificate.
 
-$IdentityName = "SaayanSoft.AnyDownloader"
+$IdentityName = "Saayan.AnyDownloader"
 $AppName = "AnyDownloader"
 $DisplayName = "Any Downloader"
 $PublisherName = "CN=37E2AF47-D2FC-489C-BDC1-02C989A7B989"
 $PublisherDisplayName = "SaayanSoft"
-$Version = "1.8.3.0"
+$Version = "1.9.2.0"
 $ExePath = "..\dist\AnyDownloaderApp.exe"
 $MsixDir = "..\MsixTemp"
 $MsixPath = "..\dist\AnyDownloader.msix"
@@ -25,8 +25,11 @@ New-Item -ItemType Directory -Path $MsixDir | Out-Null
 New-Item -ItemType Directory -Path "$MsixDir\assets" | Out-Null
 
 Copy-Item $ExePath -Destination $MsixDir
-if (Test-Path "..\assets") {
-  Copy-Item "..\assets\*" -Destination "$MsixDir\assets" -Recurse
+# Copy application tile icons for AppxManifest (all other assets are embedded inside the exe)
+foreach ($iconName in @("icon.png", "Square44x44Logo.png", "Square150x150Logo.png", "StoreLogo.png")) {
+  if (Test-Path "..\assets\$iconName") {
+    Copy-Item "..\assets\$iconName" -Destination "$MsixDir\assets\"
+  }
 }
 
 # 2. Generate AppxManifest.xml
@@ -41,7 +44,7 @@ $Manifest = @"
   <Properties>
     <DisplayName>$DisplayName</DisplayName>
     <PublisherDisplayName>$PublisherDisplayName</PublisherDisplayName>
-    <Logo>assets\icon.png</Logo>
+    <Logo>assets\StoreLogo.png</Logo>
   </Properties>
   <Resources>
     <Resource Language="en-US" />
@@ -55,7 +58,7 @@ $Manifest = @"
   </Capabilities>
   <Applications>
     <Application Id="$AppName" Executable="AnyDownloaderApp.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="$DisplayName" Description="A modern video and audio downloader" BackgroundColor="transparent" Square150x150Logo="assets\icon.png" Square44x44Logo="assets\icon.png">
+      <uap:VisualElements DisplayName="$DisplayName" Description="A modern video and audio downloader" BackgroundColor="transparent" Square150x150Logo="assets\Square150x150Logo.png" Square44x44Logo="assets\Square44x44Logo.png">
       </uap:VisualElements>
     </Application>
   </Applications>

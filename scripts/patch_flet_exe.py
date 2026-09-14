@@ -5,27 +5,41 @@ import urllib.request
 
 def patch_flet_exe():
     try:
-        from flet_cli.__pyinstaller.utils import get_flet_bin_path
-        global_flet_dir = get_flet_bin_path()
-        if not global_flet_dir:
-            print("Error: Could not locate flet bin path.")
+        from flet_desktop import ensure_client_cached
+        global_flet_dir = str(ensure_client_cached())
+        if not global_flet_dir or not os.path.exists(global_flet_dir):
+            print("Error: Could not locate flet desktop client.")
             return
 
         import shutil
         local_flet_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".flet_view"))
+        version_marker = os.path.join(local_flet_dir, "flet_version.txt")
+        current_global_tag = os.path.basename(os.path.normpath(global_flet_dir))
         
-        # Copy to local workspace to avoid modifying the global Flet installation
-        if not os.path.exists(local_flet_dir):
-            shutil.copytree(global_flet_dir, local_flet_dir)
-        else:
-            # If local_flet_dir already exists, check if flet.exe is present
-            flet_exe_candidate = os.path.join(local_flet_dir, 'flet', 'flet.exe')
-            if not os.path.exists(flet_exe_candidate):
+        needs_copy = not os.path.exists(local_flet_dir)
+        if not needs_copy:
+            cached_tag = ""
+            if os.path.isfile(version_marker):
+                try:
+                    with open(version_marker, "r", encoding="utf-8") as vf:
+                        cached_tag = vf.read().strip()
+                except Exception:
+                    pass
+            if cached_tag != current_global_tag or not os.path.exists(os.path.join(local_flet_dir, 'flet', 'flet.exe')):
+                needs_copy = True
                 try:
                     shutil.rmtree(local_flet_dir)
-                    shutil.copytree(global_flet_dir, local_flet_dir)
                 except Exception as e:
-                    print(f"Notice: Using existing .flet_view ({e})")
+                    print(f"Warning: Could not remove old .flet_view ({e})")
+        
+        if needs_copy and not os.path.exists(local_flet_dir):
+            print(f"Updating local .flet_view to {current_global_tag}...")
+            shutil.copytree(global_flet_dir, local_flet_dir)
+            try:
+                with open(version_marker, "w", encoding="utf-8") as vf:
+                    vf.write(current_global_tag)
+            except Exception:
+                pass
         
         # flet-desktop-full-x.y.z/flet/flet.exe -> .flet_view/flet/flet.exe
         flet_exe = os.path.join(local_flet_dir, 'flet', 'flet.exe')
@@ -47,19 +61,33 @@ def patch_flet_exe():
 
     icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "icon.ico"))
     
-    print("Patching flet.exe resources...")
-    commands = [
-        [rcedit_path, flet_exe, "--set-icon", icon_path],
-        [rcedit_path, flet_exe, "--set-version-string", "FileDescription", "Any Downloader"],
-        [rcedit_path, flet_exe, "--set-version-string", "ProductName", "Any Downloader"],
-        [rcedit_path, flet_exe, "--set-version-string", "CompanyName", "SwiftGrab"],
-        [rcedit_path, flet_exe, "--set-version-string", "LegalCopyright", "Copyright (c) 2026 SwiftGrab"]
-    ]
+    targets = [flet_exe]
+    global_exe = os.path.join(global_flet_dir, 'flet', 'flet.exe')
+    if os.path.exists(global_exe) and global_exe not in targets:
+        targets.append(global_exe)
+    
+    user_extract_exe = os.path.join(os.path.expanduser("~"), ".AnyDownloader", "flet_view", "flet", "flet.exe")
+    if os.path.exists(user_extract_exe) and user_extract_exe not in targets:
+        targets.append(user_extract_exe)
 
-    for cmd in commands:
-        subprocess.run(cmd, check=True)
+    for target in targets:
+        print(f"Patching resources on {target}...")
+        commands = [
+            [rcedit_path, target, "--set-icon", icon_path],
+            [rcedit_path, target, "--set-version-string", "FileDescription", "Any Downloader"],
+            [rcedit_path, target, "--set-version-string", "ProductName", "Any Downloader"],
+            [rcedit_path, target, "--set-version-string", "CompanyName", "SwiftGrab"],
+            [rcedit_path, target, "--set-version-string", "LegalCopyright", "Copyright (c) 2026 SwiftGrab"]
+        ]
+
+        for cmd in commands:
+            try:
+                subprocess.run(cmd, check=True)
+            except Exception as e:
+                print(f"Warning: Failed to patch {target}: {e}")
         
-    print("Successfully patched flet.exe!")
+    print("Successfully patched flet executables!")
 
 if __name__ == "__main__":
     patch_flet_exe()
+

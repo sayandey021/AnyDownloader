@@ -930,7 +930,12 @@ class SettingsView(ft.Container):
             import subprocess, os
             try:
                 pid = os.getpid()
-                output = subprocess.check_output(f'tasklist /m /fi "pid eq {pid}"', shell=True, text=True)
+                output = subprocess.check_output(
+                    f'tasklist /m /fi "pid eq {pid}"',
+                    shell=True,
+                    text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                )
                 dll_text.value = output
             except Exception as ex:
                 dll_text.value = f"Error fetching DLLs: {ex}"
@@ -1686,6 +1691,20 @@ class SettingsView(ft.Container):
         self._page.bgcolor = AppTheme.BACKGROUND
         self._page.theme = AppTheme.get_theme()
         self._page.theme_mode = ft.ThemeMode.LIGHT if AppTheme.MODE == 'light' else ft.ThemeMode.DARK
+        self._page.window.brightness = ft.Brightness.LIGHT if AppTheme.MODE == 'light' else ft.Brightness.DARK
+        try:
+            import main
+            if hasattr(main, 'apply_native_window_styling'):
+                icon_path = getattr(self._page.window, 'icon', None)
+                main.apply_native_window_styling("Any Downloader", icon_path, dark=(AppTheme.MODE == 'dark'))
+        except Exception:
+            pass
+
+        if hasattr(self._page, 'custom_title_bar') and self._page.custom_title_bar:
+            try:
+                self._page.custom_title_bar.update_theme()
+            except Exception:
+                pass
         # Update the container's own background color
         self.bgcolor = ft.Colors.TRANSPARENT
         # Rebuild the settings UI with new colors
