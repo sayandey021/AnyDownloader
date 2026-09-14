@@ -85,9 +85,149 @@ import threading
 from PIL import Image
 import pystray
 
+_single_instance_mutex = None
+_single_instance_socket = None
+_active_page = None
+
+def restore_and_focus_native_window():
+    if sys.platform != "win32":
+        return
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        hwnd = user32.FindWindowW("FLUTTER_RUNNER_WIN32_WINDOW", "Any Downloader")
+        if not hwnd:
+            hwnd = user32.FindWindowW(None, "Any Downloader")
+        if not hwnd:
+            hwnd = user32.FindWindowW("FLUTTER_RUNNER_WIN32_WINDOW", None)
+
+        if hwnd:
+            # If minimized (iconic), restore it (SW_RESTORE = 9)
+            if user32.IsIconic(hwnd):
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            else:
+                user32.ShowWindow(hwnd, 5)  # SW_SHOW
+
+            # Reliably bring window to foreground across Windows focus-stealing guards
+            cur_thread = kernel32.GetCurrentThreadId()
+            fg_hwnd = user32.GetForegroundWindow()
+            fg_thread = user32.GetWindowThreadProcessId(fg_hwnd, None)
+            app_thread = user32.GetWindowThreadProcessId(hwnd, None)
+
+            if fg_thread != 0 and fg_thread != cur_thread:
+                user32.AttachThreadInput(cur_thread, fg_thread, True)
+            if app_thread != 0 and app_thread != cur_thread:
+                user32.AttachThreadInput(cur_thread, app_thread, True)
+
+            user32.SetForegroundWindow(hwnd)
+            user32.BringWindowToTop(hwnd)
+            user32.SetFocus(hwnd)
+
+            if app_thread != 0 and app_thread != cur_thread:
+                user32.AttachThreadInput(cur_thread, app_thread, False)
+            if fg_thread != 0 and fg_thread != cur_thread:
+                user32.AttachThreadInput(cur_thread, fg_thread, False)
+    except Exception as e:
+        print(f"[SingleInstance] Error restoring window: {e}")
+
+def handle_activate_signal():
+    global _active_page
+    if _active_page:
+        def _do():
+            try:
+                _active_page.window.visible = True
+                _active_page.update()
+                _active_page.window.minimized = False
+                _active_page.window.focused = True
+                _active_page.update()
+                try:
+                    _active_page.run_task(_active_page.window.to_front)
+                except Exception:
+                    try:
+                        _active_page.window.to_front()
+                    except Exception:
+                        pass
+                _active_page.update()
+            except Exception:
+                pass
+            restore_and_focus_native_window()
+
+        if hasattr(_active_page, 'run_thread') and _active_page.run_thread:
+            _active_page.run_thread(_do)
+        else:
+            _do()
+    else:
+        restore_and_focus_native_window()
+
+def init_single_instance():
+    """
+    Enforces a single instance on Windows using a Named Mutex and loopback socket.
+    Returns True if primary instance, False if secondary instance (which activates existing window and exits).
+    """
+    if sys.platform != "win32":
+        return True
+
+    global _single_instance_mutex, _single_instance_socket
+    import tempfile
+    import socket
+
+    port_file = os.path.join(tempfile.gettempdir(), "any_downloader_app.port")
+    MUTEX_NAME = r"Local\AnyDownloader_SingleInstance_Mutex_2026"
+    kernel32 = ctypes.windll.kernel32
+
+    _single_instance_mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+    last_error = kernel32.GetLastError()
+
+    # ERROR_ALREADY_EXISTS = 183
+    if last_error == 183:
+        print("[SingleInstance] Existing instance detected. Sending activate signal...")
+        if os.path.exists(port_file):
+            try:
+                with open(port_file, "r") as f:
+                    port = int(f.read().strip())
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(1.0)
+                s.connect(("127.0.0.1", port))
+                s.sendall(b"activate\n")
+                s.close()
+            except Exception as e:
+                print(f"[SingleInstance] Socket signal error: {e}")
+
+        # Native fallback: restore and focus existing window handle
+        restore_and_focus_native_window()
+        return False
+
+    # Primary instance: start background loopback listener
+    try:
+        _single_instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _single_instance_socket.bind(("127.0.0.1", 0))
+        port = _single_instance_socket.getsockname()[1]
+        _single_instance_socket.listen(5)
+
+        with open(port_file, "w") as f:
+            f.write(str(port))
+
+        def _ipc_server():
+            while True:
+                try:
+                    conn, _ = _single_instance_socket.accept()
+                    data = conn.recv(1024)
+                    conn.close()
+                    if b"activate" in data:
+                        handle_activate_signal()
+                except Exception:
+                    break
+
+        threading.Thread(target=_ipc_server, daemon=True).start()
+    except Exception as e:
+        print(f"[SingleInstance] Failed to start IPC server: {e}")
+
+    return True
+
 def kill_child_flet():
     try:
-        cmd = f'wmic process where "ParentProcessId={os.getpid()} and Name=\'flet.exe\'" get ProcessId'
+        cmd = f'wmic process where "ParentProcessId={os.getpid()} and (Name=\'flet.exe\' or Name=\'flet_bin.exe\')" get ProcessId'
         output = subprocess.check_output(cmd, shell=True, text=True, creationflags=0x08000000)
         for line in output.splitlines():
             line = line.strip()
@@ -132,10 +272,11 @@ def configure_flet_runtime():
         bundled_zip = os.path.join(sys._MEIPASS, "flet_desktop", "app", "flet-windows.zip")
         extract_dir = os.path.join(os.path.expanduser("~"), ".AnyDownloader", "flet_view")
         flet_exe = os.path.join(extract_dir, "flet", "flet.exe")
+        flet_bin = os.path.join(extract_dir, "flet", "flet_bin.exe")
         version_file = os.path.join(extract_dir, "version.txt")
         current_version = str(os.path.getmtime(sys.executable)) if os.path.isfile(sys.executable) else "unknown"
         
-        needs_extract = not os.path.isfile(flet_exe)
+        needs_extract = not os.path.isfile(flet_exe) or not os.path.isfile(flet_bin)
         if not needs_extract:
             cached_version = ""
             if os.path.isfile(version_file):
@@ -158,11 +299,135 @@ def configure_flet_runtime():
                     f.write(current_version)
             except Exception as e:
                 print(f"Warning: Failed to extract flet client (might be in use): {e}")
+
+        # Ensure flet_bin.exe exists if flet.exe is the raw Flutter binary
+        if os.path.isfile(flet_exe) and not os.path.isfile(flet_bin):
+            if os.path.getsize(flet_exe) > 140000:
+                try:
+                    import shutil
+                    shutil.copy2(flet_exe, flet_bin)
+                except Exception:
+                    pass
         
         if os.path.isfile(flet_exe):
             os.environ["FLET_VIEW_PATH"] = os.path.join(extract_dir, "flet")
         else:
             os.environ["FLET_VIEW_PATH"] = os.path.join(sys._MEIPASS, "flet_desktop", "app", "flet")
+
+# COM / Shell Property Store for Taskbar grouping and Jump List relaunch
+class _GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", wintypes.DWORD),
+        ("Data2", wintypes.WORD),
+        ("Data3", wintypes.WORD),
+        ("Data4", wintypes.BYTE * 8)
+    ]
+
+class _PROPERTYKEY(ctypes.Structure):
+    _fields_ = [
+        ("fmtid", _GUID),
+        ("pid", wintypes.DWORD)
+    ]
+
+_IID_IPropertyStore = _GUID(
+    0x886d8eeb, 0x8cf2, 0x4446,
+    (wintypes.BYTE * 8)(0x8d, 0x02, 0xcd, 0xba, 0x1d, 0xbd, 0xcf, 0x99)
+)
+
+_PKEY_FMTID = _GUID(
+    0x9f4c2855, 0x9f79, 0x4b39,
+    (wintypes.BYTE * 8)(0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3)
+)
+
+_PKEY_AppUserModel_ID = _PROPERTYKEY(_PKEY_FMTID, 5)
+_PKEY_AppUserModel_RelaunchCommand = _PROPERTYKEY(_PKEY_FMTID, 2)
+_PKEY_AppUserModel_RelaunchDisplayNameResource = _PROPERTYKEY(_PKEY_FMTID, 4)
+_PKEY_AppUserModel_RelaunchIconResource = _PROPERTYKEY(_PKEY_FMTID, 3)
+
+class _PROPVARIANT(ctypes.Structure):
+    _fields_ = [
+        ("vt", ctypes.c_ushort),
+        ("wReserved1", wintypes.WORD),
+        ("wReserved2", wintypes.WORD),
+        ("wReserved3", wintypes.WORD),
+        ("pwszVal", wintypes.LPWSTR),
+        ("padding", wintypes.DWORD * 2)
+    ]
+
+class _IPropertyStoreVtbl(ctypes.Structure):
+    pass
+
+class _IPropertyStore(ctypes.Structure):
+    _fields_ = [("lpVtbl", ctypes.POINTER(_IPropertyStoreVtbl))]
+
+_STDMETHOD = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)
+_SETVALUEMETHOD = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(_PROPERTYKEY), ctypes.c_void_p)
+
+_IPropertyStoreVtbl._fields_ = [
+    ("QueryInterface", _STDMETHOD),
+    ("AddRef", _STDMETHOD),
+    ("Release", _STDMETHOD),
+    ("GetCount", _STDMETHOD),
+    ("GetAt", _STDMETHOD),
+    ("GetValue", _STDMETHOD),
+    ("SetValue", _SETVALUEMETHOD),
+    ("Commit", _STDMETHOD),
+]
+
+def set_window_relaunch_properties(hwnd, aumid, relaunch_cmd, display_name="Any Downloader", icon_res=None):
+    if sys.platform != "win32":
+        return False
+    try:
+        shell32 = ctypes.windll.shell32
+        ole32 = ctypes.windll.ole32
+        shlwapi = ctypes.windll.shlwapi
+
+        ole32.CoInitialize(None)
+
+        pps = ctypes.POINTER(_IPropertyStore)()
+        hr = shell32.SHGetPropertyStoreForWindow(hwnd, ctypes.byref(_IID_IPropertyStore), ctypes.byref(pps))
+        if hr != 0 or not pps:
+            return False
+
+        store = pps.contents
+        vtbl = store.lpVtbl.contents
+
+        def _make_prop(val):
+            pv = _PROPVARIANT()
+            p_str = wintypes.LPWSTR()
+            if shlwapi.SHStrDupW(str(val), ctypes.byref(p_str)) == 0:
+                pv.vt = 31  # VT_LPWSTR
+                pv.pwszVal = p_str
+            return pv
+
+        try:
+            if relaunch_cmd:
+                pv = _make_prop(relaunch_cmd)
+                vtbl.SetValue(pps, ctypes.byref(_PKEY_AppUserModel_RelaunchCommand), ctypes.byref(pv))
+                ole32.PropVariantClear(ctypes.byref(pv))
+
+            if display_name:
+                pv = _make_prop(display_name)
+                vtbl.SetValue(pps, ctypes.byref(_PKEY_AppUserModel_RelaunchDisplayNameResource), ctypes.byref(pv))
+                ole32.PropVariantClear(ctypes.byref(pv))
+
+            if icon_res:
+                pv = _make_prop(icon_res)
+                vtbl.SetValue(pps, ctypes.byref(_PKEY_AppUserModel_RelaunchIconResource), ctypes.byref(pv))
+                ole32.PropVariantClear(ctypes.byref(pv))
+
+            if aumid:
+                pv = _make_prop(aumid)
+                vtbl.SetValue(pps, ctypes.byref(_PKEY_AppUserModel_ID), ctypes.byref(pv))
+                ole32.PropVariantClear(ctypes.byref(pv))
+
+            vtbl.Commit(pps)
+            return True
+        finally:
+            vtbl.Release(pps)
+    except Exception as e:
+        print(f"[PropertyStore] Error: {e}")
+        return False
 
 def apply_native_window_styling(window_title="Any Downloader", icon_path=None, dark=True):
     if sys.platform != "win32":
@@ -174,14 +439,23 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
         dwmapi = ctypes.windll.dwmapi
         
         hwnd = None
-        for _ in range(40):
-            hwnd = user32.FindWindowW(None, window_title)
+        for _ in range(50):
+            hwnd = user32.FindWindowW("FLUTTER_RUNNER_WIN32_WINDOW", window_title)
+            if not hwnd:
+                hwnd = user32.FindWindowW(None, window_title)
+            if not hwnd:
+                hwnd = user32.FindWindowW("FLUTTER_RUNNER_WIN32_WINDOW", None)
             if hwnd:
                 break
             time.sleep(0.08)
 
         if not hwnd:
             return
+
+        try:
+            user32.SetWindowTextW(hwnd, window_title)
+        except Exception:
+            pass
 
         # 1. Windows 10/11 title bar dark mode
         try:
@@ -217,6 +491,20 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
                         pass
             except Exception:
                 pass
+
+        # 3. Taskbar Jump List & AppUserModelID properties
+        try:
+            aumid = get_app_user_model_id()
+            relaunch_cmd = sys.executable if getattr(sys, 'frozen', False) else f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+            set_window_relaunch_properties(
+                hwnd,
+                aumid=aumid,
+                relaunch_cmd=relaunch_cmd,
+                display_name=window_title,
+                icon_res=icon_path
+            )
+        except Exception as e:
+            print(f"[NativeStyling] Property store error: {e}")
 
     threading.Thread(target=_worker, daemon=True).start()
 
@@ -285,6 +573,9 @@ def minimize_to_tray(page: ft.Page):
     page.update()
 
 async def main(page: ft.Page):
+    global _active_page
+    _active_page = page
+
     def _safe_destroy_window():
         try:
             page.run_task(page.window.destroy)
@@ -361,6 +652,13 @@ async def main(page: ft.Page):
             import time
             time.sleep(1.0)  # Wait for flet.exe to gracefully exit
             kill_child_flet()
+            try:
+                import tempfile
+                pf = os.path.join(tempfile.gettempdir(), "any_downloader_app.port")
+                if os.path.exists(pf):
+                    os.remove(pf)
+            except Exception:
+                pass
             import os
             os._exit(0)
         threading.Thread(target=_cleanup, daemon=True).start()
@@ -611,6 +909,9 @@ async def main(page: ft.Page):
     page.window.visible = True
     page.update()
 if __name__ == "__main__":
+    if not init_single_instance():
+        sys.exit(0)
+
     # Redirect stdout/stderr to log file ONLY when packaged as an executable.
     # In development mode (python main.py), print everything directly to the terminal.
     if getattr(sys, 'frozen', False):

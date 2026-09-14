@@ -1194,8 +1194,8 @@ class SettingsView(ft.Container):
         except Exception:
             pass
 
-    def _build_engine_status_content(self, check_results=None):
-        installed = get_installed_engine_versions()
+    def _build_engine_status_content(self, check_results=None, force_refresh: bool = False):
+        installed = get_installed_engine_versions(force_refresh=force_refresh)
         last_check_time = float(self.settings.get('engine_last_check_time', 0))
         if last_check_time > 0:
             import datetime
@@ -1240,12 +1240,17 @@ class SettingsView(ft.Container):
                     )
                 )
 
+            if curr_v in ('Not Installed', 'Unknown'):
+                installed_str = curr_v
+            else:
+                installed_str = curr_v if curr_v.startswith('v') else f"v{curr_v}"
+
             chip = ft.Container(
                 content=ft.Row([
                     ft.Icon(icon, size=18, color=AppTheme.PRIMARY),
                     ft.Column([
                         ft.Text(label, size=12, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
-                        ft.Text(f"Installed: v{curr_v}", size=11, color=AppTheme.TEXT_SECONDARY),
+                        ft.Text(f"Installed: {installed_str}", size=11, color=AppTheme.TEXT_SECONDARY),
                     ], spacing=1, expand=True),
                     *status_badges
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -1337,7 +1342,7 @@ class SettingsView(ft.Container):
                 self.update_engines_btn.disabled = False
                 self.update_engines_btn.icon = ft.Icons.UPGRADE_ROUNDED
                 self.update_engines_btn.text = "Update Engines Now"
-                self.engine_status_container.content = self._build_engine_status_content()
+                self.engine_status_container.content = self._build_engine_status_content(force_refresh=True)
                 self.update()
 
                 if getattr(self, 'snack_bar', None) in self._page.overlay:

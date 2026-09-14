@@ -6,7 +6,7 @@ $AppName = "AnyDownloader"
 $DisplayName = "Any Downloader"
 $PublisherName = "CN=37E2AF47-D2FC-489C-BDC1-02C989A7B989"
 $PublisherDisplayName = "SaayanSoft"
-$Version = "1.9.3.0"
+$Version = "1.9.4.0"
 $ExePath = "..\dist\AnyDownloaderApp.exe"
 $MsixDir = "..\MsixTemp"
 $MsixPath = "..\dist\AnyDownloader.msix"
@@ -25,11 +25,14 @@ New-Item -ItemType Directory -Path $MsixDir | Out-Null
 New-Item -ItemType Directory -Path "$MsixDir\assets" | Out-Null
 
 Copy-Item $ExePath -Destination $MsixDir
-# Copy application tile icons for AppxManifest (all other assets are embedded inside the exe)
-foreach ($iconName in @("icon.png", "Square44x44Logo.png", "Square150x150Logo.png", "StoreLogo.png")) {
-  if (Test-Path "..\assets\$iconName") {
-    Copy-Item "..\assets\$iconName" -Destination "$MsixDir\assets\"
-  }
+
+# Ensure all unplated and targetsize MSIX assets are generated
+Write-Host "Generating unplated tile and taskbar assets..."
+python generate_msix_assets.py
+
+# Copy all application tile & unplated icons for AppxManifest and Jump List
+Get-ChildItem -Path "..\assets" -Filter "*.png" | ForEach-Object {
+    Copy-Item $_.FullName -Destination "$MsixDir\assets\"
 }
 
 # 2. Generate AppxManifest.xml
@@ -71,10 +74,21 @@ Write-Host "Locating Windows SDK Tools..."
 $SdkPath = "C:\Program Files (x86)\Windows Kits\10\bin"
 $MakeAppx = Get-ChildItem -Path $SdkPath -Filter "makeappx.exe" -Recurse | Where-Object { $_.DirectoryName -match "x64" } | Select-Object -First 1
 $SignTool = Get-ChildItem -Path $SdkPath -Filter "signtool.exe" -Recurse | Where-Object { $_.DirectoryName -match "x64" } | Select-Object -First 1
+$MakePri  = Get-ChildItem -Path $SdkPath -Filter "makepri.exe"  -Recurse | Where-Object { $_.DirectoryName -match "x64" } | Select-Object -First 1
 
 if (-not $MakeAppx -or -not $SignTool) {
   Write-Host "Error: MakeAppx.exe or SignTool.exe not found. Please install the Windows 10/11 SDK." -ForegroundColor Red
   exit 1
+}
+
+# 3.5 Generate resources.pri index for unplated taskbar & jump list icons
+if ($MakePri) {
+  Write-Host "Generating resources.pri index with MakePri (unplated taskbar icons)..."
+  & $MakePri.FullName createconfig /cf "$MsixDir\priconfig.xml" /dq en-US /pv 10.0.0 /o | Out-Null
+  & $MakePri.FullName new /pr $MsixDir /cf "$MsixDir\priconfig.xml" /of "$MsixDir\resources.pri" /o | Out-Null
+  if (Test-Path "$MsixDir\priconfig.xml") { Remove-Item "$MsixDir\priconfig.xml" }
+} else {
+  Write-Host "Warning: makepri.exe not found; packaging without resources.pri" -ForegroundColor Yellow
 }
 
 # 4. Create MSIX

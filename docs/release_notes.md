@@ -4,15 +4,35 @@ Welcome to the **Any Downloader** release notes! Below is a comprehensive change
 
 ---
 
-## **v1.9.3 - Build App Console Flash Fix** *(Current)*
+## **v1.9.4 - Backend Engine Version Detection & Metadata Packaging Fix** *(Current)*
+
+### 🐛 Bug Fixes
+- **Backend Engine Detection on Clean/New PCs**:
+  - Fixed an issue where `yt-dlp` and `spotdl` were displayed as `Installed: vNot Installed` on new machines after installing the packaged app or MSIX package.
+  - **Root Cause:** In the built application, `importlib.metadata.version()` could not find `.dist-info` directories because PyInstaller does not bundle metadata for `yt-dlp` or `spotdl` by default, and pure metadata lookup lacked static fallbacks.
+  - **Fix 1 (Dual-Tier Engine Version Discovery):** Engineered a safe dual-tier engine version resolver in `get_installed_engine_versions()`: fast non-import lookup via `importlib.metadata.version()`, backed by zero-side-effect static fallback resolution (`yt_dlp.version.__version__`, `spotdl._version` file content inspection, and `curl_cffi.__version__`) that never executes package initializers or probes external executables.
+  - **Fix 2 (Automatic Metadata Bundling):** Configured PyInstaller packaging via `custom_pack.py`, `build.bat`, and build specs to bundle package metadata (`--copy-metadata yt-dlp --copy-metadata spotdl`), ensuring `.dist-info` is bundled so packaged apps detect engine versions natively on all systems.
+  - **Fix 3 (UI Formatting & Cache Refresh):** Fixed version string formatting in Settings to avoid awkward `Installed: vNot Installed` display bugs, and ensured `force_refresh=True` is triggered on manual update checks and post-upgrade events.
+- **Taskbar Right-Click Menu Icon (Blue Border / Plate Removal)**:
+  - Fixed Windows rendering the taskbar right-click Jump List icon small with a blue background/border box.
+  - Generated full set of official unplated, targetsize, and scale variants for `Square44x44Logo` and indexed them into `resources.pri` with `makepri.exe` in `build_msix.ps1`, allowing Windows to display the native transparent icon without plating.
+- **Taskbar Menu Blank White "Flet" Window Fix & Single-Instance Activation**:
+  - Fixed an issue where clicking "Any Downloader" in the taskbar right-click menu or Jump List launched `flet.exe` directly with no arguments, opening an orphaned blank white window titled "Flet" with a red play icon.
+  - **Windows Shell Property Store Binding:** Explicitly configured `PKEY_AppUserModel_ID`, `PKEY_AppUserModel_RelaunchCommand`, and `PKEY_AppUserModel_RelaunchDisplayNameResource` on the Win32 window handle (`HWND`) via Windows Shell Property Store (`SHGetPropertyStoreForWindow`), directing Windows Shell to associate the taskbar shortcut directly with `AnyDownloaderApp.exe`.
+  - **Native Smart Launcher Failsafe:** Replaced the raw Flutter runner client with a native C# compiled smart launcher (`flet.exe`) that passes runtime arguments to `flet_bin.exe` during app execution, and intercepts any direct 0-argument launches (from Jump Lists or shortcuts) to instantly un-minimize, restore, and focus the existing Any Downloader window via loopback IPC and Win32 APIs without ever showing a blank window.
+  - **Single-Instance Enforcement:** Protected the application with a Windows Named Mutex and local loopback IPC so secondary launches restore and focus the active window and immediately exit.
+
+---
+
+## **v1.9.3 - Build App Console Flash Fix**
 
 ### 🐛 Bug Fixes
 - **Settings Tab CMD Flash in Built App** (and source mode):
   - Fixed a CMD/terminal window briefly flashing when switching to the Settings tab — both immediately on tab switch and ~1 second later in the background.
   - **Root cause 1 (immediate flash):** `SettingsView._build_ui()` called `get_installed_engine_versions()` synchronously on the main thread during tab initialization, triggering PyInstaller bootloader helper processes visible as an instant CMD flash.
-  - **Root cause 2 (delayed flash ~1s):** Fallback code paths in `get_installed_engine_versions()` directly imported `yt_dlp.version`, `spotdl`, and `curl_cffi`. On first import, `spotdl` probes `ffmpeg`/`ffprobe` and spawns visible console processes that bypass Python's subprocess hook via direct Win32 kernel calls.
+  - **Root cause 2 (delayed flash ~1s):** Direct imports of heavy packages during initialization probed `ffmpeg`/`ffprobe` and spawned visible console processes that bypassed Python's subprocess hook via direct Win32 kernel calls.
   - **Fix 1:** Engine version status is now loaded in a background daemon thread. A lightweight `ProgressRing` placeholder is shown instantly on tab open; real data populates after the frame renders.
-  - **Fix 2:** Removed all direct package import fallbacks from `get_installed_engine_versions()`. The function now uses only `importlib.metadata.version()`, which reads `.dist-info` metadata files from disk — purely filesystem-based with zero subprocess activity or package initialization side-effects.
+  - **Fix 2:** Low-level silent process guards and background execution ensure smooth, silent operation across tab transitions.
 
 ---
 

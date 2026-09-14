@@ -1,11 +1,11 @@
-# -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import copy_metadata
 
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets'), ('C:\\Users\\sayan\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\ytmusicapi\\locales', 'ytmusicapi/locales')],
+    datas=[('assets', 'assets'), ('C:\\Users\\sayan\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\ytmusicapi\\locales', 'ytmusicapi/locales')] + copy_metadata('yt-dlp') + copy_metadata('spotdl'),
     hiddenimports=['AppleMusicMP3'],
     hookspath=[],
     hooksconfig={},

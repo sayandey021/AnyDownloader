@@ -16,8 +16,8 @@ _cached_engine_versions: Optional[Dict[str, str]] = None
 def get_installed_engine_versions(force_refresh: bool = False) -> Dict[str, str]:
     """Retrieve currently installed versions of backend engines safely.
 
-    Uses only importlib.metadata which is purely filesystem-based and never
-    spawns subprocesses or triggers package initialization hooks.
+    Uses importlib.metadata first, with lightweight module __version__ attribute
+    fallbacks for packaged/frozen environments where dist-info may not be present.
     """
     global _cached_engine_versions
     if not force_refresh and _cached_engine_versions is not None:
@@ -29,17 +29,64 @@ def get_installed_engine_versions(force_refresh: bool = False) -> Dict[str, str]
         'curl_cffi': 'Not Installed',
     }
 
-    # importlib.metadata reads the package dist-info directory — no imports,
-    # no subprocess spawning, no package initialization side-effects.
+    # 1. Primary lookup: importlib.metadata (pure filesystem-based dist-info read)
     try:
         import importlib.metadata
         for pkg_name, engine_key in [('yt-dlp', 'yt-dlp'), ('spotdl', 'spotdl'), ('curl-cffi', 'curl_cffi')]:
             try:
-                versions[engine_key] = importlib.metadata.version(pkg_name)
+                v = importlib.metadata.version(pkg_name)
+                if v:
+                    versions[engine_key] = v
             except Exception:
                 pass
     except Exception:
         pass
+
+    # 2. Safe fallbacks for frozen/packaged binaries where dist-info may not be bundled:
+    # yt-dlp fallback: import only yt_dlp.version (pure static string file, no subprocesses)
+    if versions['yt-dlp'] in ('Not Installed', 'Unknown'):
+        try:
+            import yt_dlp.version
+            v = getattr(yt_dlp.version, '__version__', None)
+            if v:
+                versions['yt-dlp'] = str(v)
+        except Exception:
+            try:
+                import yt_dlp
+                v = getattr(yt_dlp, '__version__', None) or getattr(getattr(yt_dlp, 'version', None), '__version__', None)
+                if v:
+                    versions['yt-dlp'] = str(v)
+            except Exception:
+                pass
+
+    # spotdl fallback: read _version.py text safely or import spotdl._version
+    if versions['spotdl'] in ('Not Installed', 'Unknown'):
+        try:
+            import importlib.resources
+            f = importlib.resources.files('spotdl') / '_version.py'
+            content = f.read_text(encoding='utf-8')
+            for line in content.splitlines():
+                if line.strip().startswith('__version__'):
+                    versions['spotdl'] = line.split('=')[1].strip().strip('"\'')
+                    break
+        except Exception:
+            try:
+                import spotdl._version
+                v = getattr(spotdl._version, '__version__', None)
+                if v:
+                    versions['spotdl'] = str(v)
+            except Exception:
+                pass
+
+    # curl_cffi fallback: read module __version__
+    if versions['curl_cffi'] in ('Not Installed', 'Unknown'):
+        try:
+            import curl_cffi
+            v = getattr(curl_cffi, '__version__', None)
+            if v:
+                versions['curl_cffi'] = str(v)
+        except Exception:
+            pass
 
     _cached_engine_versions = dict(versions)
     return versions
@@ -84,9 +131,9 @@ def is_version_newer(latest: str, current: str) -> bool:
         return latest.strip() != current.strip()
 
 
-def check_for_engine_updates() -> Dict[str, Any]:
+def check_for_engine_updates(force_refresh: bool = True) -> Dict[str, Any]:
     """Check PyPI for newer versions of core engines and record check time."""
-    current_versions = get_installed_engine_versions()
+    current_versions = get_installed_engine_versions(force_refresh=force_refresh)
     results = {
         'engines': {},
         'has_updates': False,

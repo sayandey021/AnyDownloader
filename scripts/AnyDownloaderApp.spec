@@ -1,11 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import copy_metadata
+
+datas = [('../assets', 'assets'), ('C:/Users/sayan/AppData/Roaming/Python/Python312/site-packages/ytmusicapi/locales', 'ytmusicapi/locales')]
+datas += copy_metadata('yt-dlp')
+datas += copy_metadata('spotdl')
 
 
 a = Analysis(
     ['../main.py'],
     pathex=[],
     binaries=[],
-    datas=[('../assets', 'assets'), ('C:/Users/sayan/AppData/Roaming/Python/Python312/site-packages/ytmusicapi/locales', 'ytmusicapi/locales')],
+    datas=datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,6 +40,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    version='C:/Users/sayan/AppData/Local/Temp/7fea606e-6a66-49c3-8385-411a37f4aa89',
+    version='C:/Users/sayan/AppData/Local/Temp/39ae39f2-2d4b-40a3-b826-bf7d773247dd',
     icon=['../assets/icon.ico'],
 )
