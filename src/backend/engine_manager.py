@@ -10,16 +10,27 @@ from typing import Dict, Any, Optional, Callable
 
 from src.backend.settings import SettingsManager
 
+_cached_engine_versions: Optional[Dict[str, str]] = None
 
-def get_installed_engine_versions() -> Dict[str, str]:
-    """Retrieve currently installed versions of backend engines."""
+
+def get_installed_engine_versions(force_refresh: bool = False) -> Dict[str, str]:
+    """Retrieve currently installed versions of backend engines safely.
+
+    Uses only importlib.metadata which is purely filesystem-based and never
+    spawns subprocesses or triggers package initialization hooks.
+    """
+    global _cached_engine_versions
+    if not force_refresh and _cached_engine_versions is not None:
+        return dict(_cached_engine_versions)
+
     versions = {
         'yt-dlp': 'Not Installed',
         'spotdl': 'Not Installed',
         'curl_cffi': 'Not Installed',
     }
 
-    # First attempt: fast metadata lookup without importing heavy packages or subprocesses
+    # importlib.metadata reads the package dist-info directory — no imports,
+    # no subprocess spawning, no package initialization side-effects.
     try:
         import importlib.metadata
         for pkg_name, engine_key in [('yt-dlp', 'yt-dlp'), ('spotdl', 'spotdl'), ('curl-cffi', 'curl_cffi')]:
@@ -30,40 +41,7 @@ def get_installed_engine_versions() -> Dict[str, str]:
     except Exception:
         pass
 
-    # yt-dlp fallback
-    if versions['yt-dlp'] == 'Not Installed':
-        try:
-            import yt_dlp
-            v = getattr(yt_dlp, '__version__', None) or getattr(yt_dlp.version, '__version__', None)
-            if v:
-                versions['yt-dlp'] = str(v)
-        except Exception:
-            pass
-
-    # spotdl fallback
-    if versions['spotdl'] == 'Not Installed':
-        try:
-            import spotdl
-            v = getattr(spotdl, '__version__', None)
-            if v:
-                versions['spotdl'] = str(v)
-            else:
-                versions['spotdl'] = 'Installed'
-        except Exception:
-            pass
-
-    # curl_cffi fallback
-    if versions['curl_cffi'] == 'Not Installed':
-        try:
-            import curl_cffi
-            v = getattr(curl_cffi, '__version__', None)
-            if v:
-                versions['curl_cffi'] = str(v)
-            else:
-                versions['curl_cffi'] = 'Installed'
-        except Exception:
-            pass
-
+    _cached_engine_versions = dict(versions)
     return versions
 
 

@@ -508,10 +508,18 @@ class SettingsView(ft.Container):
             tooltip="Download and install the latest versions of all backend engines"
         )
 
+        # Show a lightweight placeholder immediately — the real engine status
+        # is loaded in a background thread to avoid heavy imports (yt_dlp, spotdl)
+        # on the main thread which can cause a CMD flash in frozen/built apps.
         self.engine_status_container = ft.Container(
-            content=self._build_engine_status_content(),
+            content=ft.Row([
+                ft.ProgressRing(width=16, height=16, stroke_width=2, color=AppTheme.PRIMARY),
+                ft.Text("Loading engine status...", size=12, color=AppTheme.TEXT_SECONDARY),
+            ], spacing=8),
             padding=ft.Padding(0, 5, 0, 5),
         )
+        import threading as _threading
+        _threading.Thread(target=self._load_engine_status_async, daemon=True).start()
 
         # ── SponsorBlock (YouTube) Controls ──
         def _on_sb_toggle(e):
@@ -829,7 +837,6 @@ class SettingsView(ft.Container):
                 ("spotdl (Spotify Download)", importlib.util.find_spec("spotdl") is not None),
                 ("requests (HTTP Client)", importlib.util.find_spec("requests") is not None),
                 ("beautifulsoup4 (HTML Parser)", importlib.util.find_spec("bs4") is not None),
-                ("AppleMusicMP3 (Apple Music)", importlib.util.find_spec("AppleMusicMP3") is not None),
                 ("curl_cffi (Bypass Protection)", importlib.util.find_spec("curl_cffi") is not None),
                 ("flet (UI Framework)", importlib.util.find_spec("flet") is not None),
                 ("Pillow (Image Processing)", importlib.util.find_spec("PIL") is not None),
@@ -860,7 +867,13 @@ class SettingsView(ft.Container):
                     req_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'requirements.txt')
                     if os.path.exists(req_file):
                         try:
-                            subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_file], check=False, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                            c_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                            si = None
+                            if os.name == 'nt':
+                                si = subprocess.STARTUPINFO()
+                                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                                si.wShowWindow = 0
+                            subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_file], check=False, creationflags=c_flags, startupinfo=si)
                         except Exception:
                             pass
 
@@ -917,7 +930,8 @@ class SettingsView(ft.Container):
             except:
                 pass
 
-        _update_troubleshoot_ui()
+        if self.settings.get('developer_mode', False):
+            _update_troubleshoot_ui()
 
         dll_text = ft.Text("Click 'Load DLLs' to view loaded modules for the current process.", size=12, color=AppTheme.TEXT_SECONDARY, selectable=True)
         dll_container = ft.Container(
@@ -930,11 +944,18 @@ class SettingsView(ft.Container):
             import subprocess, os
             try:
                 pid = os.getpid()
+                c_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                si = None
+                if os.name == 'nt':
+                    si = subprocess.STARTUPINFO()
+                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    si.wShowWindow = 0
                 output = subprocess.check_output(
                     f'tasklist /m /fi "pid eq {pid}"',
                     shell=True,
                     text=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                    creationflags=c_flags,
+                    startupinfo=si
                 )
                 dll_text.value = output
             except Exception as ex:
@@ -1152,6 +1173,26 @@ class SettingsView(ft.Container):
         else:
             import threading
             threading.Thread(target=run, daemon=True).start()
+
+    def _load_engine_status_async(self):
+        """Load engine version data in a background thread and update the UI when ready."""
+        import time
+        # Small delay to let the UI frame render before updating the container
+        time.sleep(0.05)
+        try:
+            content = self._build_engine_status_content()
+            def _update():
+                try:
+                    self.engine_status_container.content = content
+                    self.engine_status_container.update()
+                except Exception:
+                    pass
+            if hasattr(self._page, 'run_thread') and self._page.run_thread:
+                self._page.run_thread(_update)
+            else:
+                _update()
+        except Exception:
+            pass
 
     def _build_engine_status_content(self, check_results=None):
         installed = get_installed_engine_versions()

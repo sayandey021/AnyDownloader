@@ -6,6 +6,26 @@ from ctypes import wintypes
 
 # Suppress visible terminal/cmd console flashing for any background subprocesses on Windows
 if sys.platform == "win32":
+    import _winapi
+
+    _orig_CreateProcess = _winapi.CreateProcess
+
+    def _silent_CreateProcess(app_name, cmd_line, proc_attrs, thread_attrs, inherit_handles, creationflags, env, cwd, startupinfo):
+        # Do not force CREATE_NO_WINDOW or SW_HIDE on flet.exe GUI client
+        target = (str(app_name or '') + ' ' + str(cmd_line or '')).lower()
+        if 'flet.exe' not in target:
+            creationflags |= 0x08000000  # CREATE_NO_WINDOW
+            if startupinfo is None:
+                startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0  # SW_HIDE
+
+        return _orig_CreateProcess(app_name, cmd_line, proc_attrs, thread_attrs, inherit_handles, creationflags, env, cwd, startupinfo)
+
+    _winapi.CreateProcess = _silent_CreateProcess
+    if hasattr(subprocess, '_winapi'):
+        subprocess._winapi.CreateProcess = _silent_CreateProcess
+
     _orig_popen = subprocess.Popen
 
     class _SilentPopen(_orig_popen):
@@ -23,20 +43,23 @@ if sys.platform == "win32":
                 creationflags |= subprocess.CREATE_NO_WINDOW
                 kwargs["creationflags"] = creationflags
 
-                startupinfo = kwargs.get("startupinfo")
-                if startupinfo is None:
-                    startupinfo = subprocess.STARTUPINFO()
-                    kwargs["startupinfo"] = startupinfo
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = 0  # SW_HIDE
+                if "startupinfo" in kwargs and kwargs["startupinfo"] is not None:
+                    kwargs["startupinfo"].dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    kwargs["startupinfo"].wShowWindow = 0
+                elif len(args) <= 12:
+                    si = subprocess.STARTUPINFO()
+                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    si.wShowWindow = 0
+                    kwargs["startupinfo"] = si
 
             super().__init__(*args, **kwargs)
 
     subprocess.Popen = _SilentPopen
 
 def _ensure_dependencies():
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, 'frozen', False) or getattr(sys, '_any_downloader_deps_checked', False):
         return
+    sys._any_downloader_deps_checked = True
     req_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'requirements.txt'))
     if not os.path.exists(req_file):
         return
@@ -45,10 +68,10 @@ def _ensure_dependencies():
     except ImportError:
         print("Missing dependencies detected! Installing automatically...")
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_file], check=True)
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_file], check=True, creationflags=0x08000000 if os.name == 'nt' else 0)
             print("Dependencies installed successfully! Restarting...")
             if os.name == 'nt':
-                subprocess.call([sys.executable] + sys.argv)
+                subprocess.call([sys.executable] + sys.argv, creationflags=0x08000000)
                 sys.exit(0)
             else:
                 os.execv(sys.executable, [sys.executable] + sys.argv[1:])

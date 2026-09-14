@@ -147,6 +147,10 @@ def patched_init(self, *args, **kwargs):
         if _is_ffmpeg_conversion(cmd):
             if 'stderr' not in kwargs or kwargs['stderr'] is None:
                 kwargs['stderr'] = subprocess.PIPE
+    if sys.platform == "win32":
+        creationflags = kwargs.get('creationflags', 0)
+        creationflags |= subprocess.CREATE_NO_WINDOW
+        kwargs['creationflags'] = creationflags
     _original_init(self, *args, **kwargs)
 
 def patched_wait(self, timeout=None):

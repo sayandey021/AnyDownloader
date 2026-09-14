@@ -4,16 +4,29 @@ Welcome to the **Any Downloader** release notes! Below is a comprehensive change
 
 ---
 
-## **v1.9.2 - History Tab & Settings Quality Fixes** *(Current)*
+## **v1.9.3 - Build App Console Flash Fix** *(Current)*
+
+### 🐛 Bug Fixes
+- **Settings Tab CMD Flash in Built App** (and source mode):
+  - Fixed a CMD/terminal window briefly flashing when switching to the Settings tab — both immediately on tab switch and ~1 second later in the background.
+  - **Root cause 1 (immediate flash):** `SettingsView._build_ui()` called `get_installed_engine_versions()` synchronously on the main thread during tab initialization, triggering PyInstaller bootloader helper processes visible as an instant CMD flash.
+  - **Root cause 2 (delayed flash ~1s):** Fallback code paths in `get_installed_engine_versions()` directly imported `yt_dlp.version`, `spotdl`, and `curl_cffi`. On first import, `spotdl` probes `ffmpeg`/`ffprobe` and spawns visible console processes that bypass Python's subprocess hook via direct Win32 kernel calls.
+  - **Fix 1:** Engine version status is now loaded in a background daemon thread. A lightweight `ProgressRing` placeholder is shown instantly on tab open; real data populates after the frame renders.
+  - **Fix 2:** Removed all direct package import fallbacks from `get_installed_engine_versions()`. The function now uses only `importlib.metadata.version()`, which reads `.dist-info` metadata files from disk — purely filesystem-based with zero subprocess activity or package initialization side-effects.
+
+---
+
+## **v1.9.2 - History Tab & Settings Quality Fixes**
 
 ### 🐛 Bug Fixes
 - **History Tab Notification Count Badge Removal**:
   - Removed the notification count badge pill next to the "History" tab title for a cleaner, distraction-free header layout.
 - **Settings Console Window Flashing Fix**:
-  - Eliminated the brief black terminal/command prompt window popup when navigating to Settings or changing options by:
-    - Installing a global silent `subprocess.Popen` hook on Windows with `CREATE_NO_WINDOW` and `SW_HIDE` flags.
-    - Optimizing backend engine version discovery via `importlib.metadata` to query package versions instantly without heavy imports or background subprocesses.
-    - Adding explicit `CREATE_NO_WINDOW` flags to diagnostic and Explorer process invocations.
+  - Completely eliminated the brief black terminal/command prompt window popup when switching to the Settings tab for the first time by:
+    - Installing a low-level Win32 `_winapi.CreateProcess` and `subprocess.Popen` silent interceptor on Windows that unconditionally enforces `CREATE_NO_WINDOW` (0x08000000) and `STARTF_USESHOWWINDOW` (`SW_HIDE`) on all background child processes across standard and third-party libraries while preserving the main Flet GUI client.
+    - Hardening `YtdlPopen` in `downloader.py` to strictly enforce `CREATE_NO_WINDOW` and hidden window attributes.
+    - Optimizing backend engine version discovery with in-memory caching and lightweight `_version` metadata imports, completely avoiding heavy package executions on tab switch.
+    - Deferring troubleshoot diagnostics so dependency validation only runs when Developer Mode is active.
 
 ---
 
