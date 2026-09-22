@@ -16,7 +16,7 @@ This document lists all the websites currently supported by Any Downloader. We d
 | Allstar | allstar.gg | 🔴 Not Working |
 | Vimeo | vimeo.com | 🟢 Verified Working |
 | Dailymotion | dailymotion.com | 🟢 Verified Working |
-| Bilibili | bilibili.com | 🟡 Working (Needs Cookies) |
+| Bilibili | bilibili.com | 🟢 Verified Working |
 | Rumble | rumble.com | 🟢 Verified Working |
 | 17.live | 17.live | 🟡 Working (No Thumbnail) |
 | 56.com | 56.com | 🟢 Verified WorkingS |
