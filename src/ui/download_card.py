@@ -376,7 +376,7 @@ class DownloadCard(ft.Container):
             multiline=True,
             read_only=True,
             expand=True,
-            border_color=AppTheme.SURFACE_VARIANT,
+            border=AppTheme.get_input_border(border_color=AppTheme.SURFACE_VARIANT),
             text_size=12
         )
         

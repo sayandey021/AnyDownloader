@@ -17,6 +17,7 @@ class SettingsView(ft.Container):
     def __init__(self, page: ft.Page, on_close=None, show_back_button=True, on_theme_changed=None):
         super().__init__()
         self._page = page
+        self._settings_tab_index = getattr(page, 'settings_tab_index', 0)
         self._on_close = on_close
         self.show_back_button = show_back_button
         self.on_theme_changed = on_theme_changed
@@ -416,28 +417,28 @@ class SettingsView(ft.Container):
             on_click=lambda e: self._browse_file('cookies_path', self.cookies_path_field),
         )
 
-        login_insta_btn = ft.ElevatedButton(
+        login_insta_btn = ft.Button(
             "Login to Instagram",
             icon=ft.Icons.CAMERA_ALT_ROUNDED,
             on_click=lambda e: self._login_browser('https://www.instagram.com/'),
             bgcolor=AppTheme.SURFACE_VARIANT,
             color=AppTheme.TEXT_PRIMARY
         )
-        login_fb_btn = ft.ElevatedButton(
+        login_fb_btn = ft.Button(
             "Login to Facebook",
             icon=ft.Icons.FACEBOOK_ROUNDED,
             on_click=lambda e: self._login_browser('https://www.facebook.com/'),
             bgcolor=AppTheme.SURFACE_VARIANT,
             color=AppTheme.TEXT_PRIMARY
         )
-        login_x_btn = ft.ElevatedButton(
+        login_x_btn = ft.Button(
             "Login to X (Twitter)",
             icon=ft.Icons.ALTERNATE_EMAIL_ROUNDED,
             on_click=lambda e: self._login_browser('https://x.com/'),
             bgcolor=AppTheme.SURFACE_VARIANT,
             color=AppTheme.TEXT_PRIMARY
         )
-        login_yt_btn = ft.ElevatedButton(
+        login_yt_btn = ft.Button(
             "Login to YouTube",
             icon=ft.Icons.PLAY_CIRCLE_FILL_ROUNDED,
             on_click=lambda e: self._login_browser('https://www.youtube.com/'),
@@ -495,7 +496,7 @@ class SettingsView(ft.Container):
             tooltip="Query PyPI for newer versions of yt-dlp, spotdl, and curl_cffi"
         )
 
-        self.update_engines_btn = ft.ElevatedButton(
+        self.update_engines_btn = ft.Button(
             "Update Engines Now",
             icon=ft.Icons.UPGRADE_ROUNDED,
             style=ft.ButtonStyle(
@@ -771,7 +772,7 @@ class SettingsView(ft.Container):
                     ft.Image(src=img_path, fit="cover", width=120, height=68, border_radius=6),
                     ft.Container(
                         content=ft.Text(label, size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                        bgcolor=ft.Colors.BLACK54,
+                        bgcolor=ft.Colors.BLACK_54,
                         padding=ft.Padding(4, 2, 4, 2),
                         border_radius=4,
                         bottom=4, right=4
@@ -801,7 +802,7 @@ class SettingsView(ft.Container):
             ft.Text("Background Image", size=14, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
             demo_thumbs,
             ft.Row([
-                ft.ElevatedButton("Browse Local Image...", icon=ft.Icons.FOLDER_OPEN_ROUNDED, 
+                ft.Button("Browse Local Image...", icon=ft.Icons.FOLDER_OPEN_ROUNDED,
                                   on_click=_browse_bg_image),
                 ft.TextButton("Clear Background", icon=ft.Icons.CLEAR_ROUNDED, on_click=lambda _: _set_bg_image(''), style=ft.ButtonStyle(color=AppTheme.ERROR))
             ]),
@@ -898,7 +899,7 @@ class SettingsView(ft.Container):
             import threading
             threading.Thread(target=fix_task, daemon=True).start()
 
-        fix_btn = ft.ElevatedButton(
+        fix_btn = ft.Button(
             "Fix Missing",
             icon=ft.Icons.AUTO_FIX_HIGH_ROUNDED,
             on_click=_fix_dependencies,
@@ -962,7 +963,7 @@ class SettingsView(ft.Container):
                 dll_text.value = f"Error fetching DLLs: {ex}"
             dll_text.update()
 
-        load_dlls_btn = ft.ElevatedButton("Load System DLLs", icon=ft.Icons.DATA_OBJECT_ROUNDED, on_click=_load_dlls, bgcolor=AppTheme.SURFACE_VARIANT, color=AppTheme.TEXT_PRIMARY)
+        load_dlls_btn = ft.Button("Load System DLLs", icon=ft.Icons.DATA_OBJECT_ROUNDED, on_click=_load_dlls, bgcolor=AppTheme.SURFACE_VARIANT, color=AppTheme.TEXT_PRIMARY)
 
         advanced_expansion = ft.ExpansionTile(
             title=ft.Text("Advanced Diagnostics & DLLs", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
@@ -981,7 +982,7 @@ class SettingsView(ft.Container):
             ]
         )
 
-        refresh_btn = ft.ElevatedButton(
+        refresh_btn = ft.Button(
             "Refresh Status",
             icon=ft.Icons.REFRESH_ROUNDED,
             on_click=_update_troubleshoot_ui,
@@ -1073,7 +1074,8 @@ class SettingsView(ft.Container):
 
         tabs_controller = ft.Tabs(
             length=len(tabs),
-            selected_index=0,
+            selected_index=min(self._settings_tab_index, len(tabs) - 1),
+            on_change=self._on_settings_tab_change,
             content=ft.Column([
                 tab_bar,
                 tab_view
@@ -1093,6 +1095,10 @@ class SettingsView(ft.Container):
             ],
             spacing=0,
         )
+
+    def _on_settings_tab_change(self, e):
+        self._settings_tab_index = e.control.selected_index
+        self._page.settings_tab_index = self._settings_tab_index
 
     # ------------------------------------------------------------------ helpers
     def _section(self, title: str, icon, children: list) -> ft.Container:
@@ -1436,7 +1442,7 @@ class SettingsView(ft.Container):
                         ft.Text(p[1], color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.W_600, size=13),
                         ft.Text(f"Code: {p[0]} — {p[2]}", color=AppTheme.TEXT_SECONDARY, size=11),
                     ], spacing=2, expand=True),
-                    ft.ElevatedButton(
+                    ft.Button(
                         "Apply",
                         icon=ft.Icons.CHECK_ROUNDED,
                         style=ft.ButtonStyle(
@@ -1534,7 +1540,7 @@ class SettingsView(ft.Container):
                         ft.Text(f"Format: {t[0]}", color=AppTheme.ACCENT, size=11, weight=ft.FontWeight.W_500),
                         ft.Text(f"Example: {t[2]}", color=AppTheme.TEXT_SECONDARY, size=11),
                     ], spacing=2, expand=True),
-                    ft.ElevatedButton(
+                    ft.Button(
                         "Apply",
                         icon=ft.Icons.CHECK_ROUNDED,
                         style=ft.ButtonStyle(
@@ -1733,31 +1739,6 @@ class SettingsView(ft.Container):
         self.settings.save()
         AppTheme.apply(new_theme, new_accent, new_bg, new_opacity)
         
-        # Update UI colors immediately
-        self._page.bgcolor = AppTheme.BACKGROUND
-        self._page.theme = AppTheme.get_theme()
-        self._page.theme_mode = ft.ThemeMode.LIGHT if AppTheme.MODE == 'light' else ft.ThemeMode.DARK
-        self._page.window.brightness = ft.Brightness.LIGHT if AppTheme.MODE == 'light' else ft.Brightness.DARK
-        try:
-            import main
-            if hasattr(main, 'apply_native_window_styling'):
-                icon_path = getattr(self._page.window, 'icon', None)
-                main.apply_native_window_styling("Any Downloader", icon_path, dark=(AppTheme.MODE == 'dark'))
-        except Exception:
-            pass
-
-        if hasattr(self._page, 'custom_title_bar') and self._page.custom_title_bar:
-            try:
-                self._page.custom_title_bar.update_theme()
-            except Exception:
-                pass
-        # Update the container's own background color
-        self.bgcolor = ft.Colors.TRANSPARENT
-        # Rebuild the settings UI with new colors
-        self._build_ui()
-        self.update()
-        self._page.update()
-        
         if self.on_theme_changed:
             import inspect
             sig = inspect.signature(self.on_theme_changed)
@@ -1766,6 +1747,28 @@ class SettingsView(ft.Container):
                 self.on_theme_changed(show_notification=not is_slider)
             else:
                 self.on_theme_changed()
+        else:
+            self._page.bgcolor = AppTheme.BACKGROUND
+            self._page.theme = AppTheme.get_theme()
+            self._page.theme_mode = ft.ThemeMode.LIGHT if AppTheme.MODE == 'light' else ft.ThemeMode.DARK
+            self._page.window.brightness = ft.Brightness.DARK if AppTheme.MODE == 'dark' else ft.Brightness.LIGHT
+            try:
+                import main
+                if hasattr(main, 'apply_native_window_styling'):
+                    icon_path = getattr(self._page.window, 'icon', None)
+                    main.apply_native_window_styling("Any Downloader", icon_path, dark=(AppTheme.MODE == 'dark'), update_icons=False)
+            except Exception:
+                pass
+
+            if hasattr(self._page, 'custom_title_bar') and self._page.custom_title_bar:
+                try:
+                    self._page.custom_title_bar.update_theme()
+                except Exception:
+                    pass
+            self.bgcolor = ft.Colors.TRANSPARENT
+            self._build_ui()
+            self.update()
+            self._page.update()
 
     def _close(self, e):
         if self._on_close:

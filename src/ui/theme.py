@@ -103,6 +103,21 @@ class AppTheme:
         )
 
     @classmethod
+    def get_input_border(cls, border_color=None, focused_border_color=None, border_radius=4):
+        border = {
+            ft.ControlState.DEFAULT: ft.OutlineInputBorder(
+                side=ft.BorderSide(color=border_color) if border_color is not None else None,
+                border_radius=border_radius,
+            )
+        }
+        if focused_border_color is not None:
+            border[ft.ControlState.FOCUSED] = ft.OutlineInputBorder(
+                side=ft.BorderSide(color=focused_border_color),
+                border_radius=border_radius,
+            )
+        return border
+
+    @classmethod
     def get_theme(cls):
         return ft.Theme(
             color_scheme=ft.ColorScheme(

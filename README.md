@@ -7,7 +7,7 @@
   
   <p>
     <img src="https://img.shields.io/badge/Python-3.8+-blue.svg?logo=python&logoColor=white" alt="Python Version">
-    <img src="https://img.shields.io/badge/Flet-UI-orange.svg?logo=flutter&logoColor=white" alt="Flet">
+    <img src="https://img.shields.io/badge/PySide6-Qt_6_/_QML-41cd52.svg?logo=qt&logoColor=white" alt="PySide6 / Qt 6">
     <img src="https://img.shields.io/badge/yt--dlp-Backend-red.svg?logo=youtube&logoColor=white" alt="yt-dlp">
     <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   </p>
@@ -19,17 +19,18 @@
 
 <br>
 
-Welcome to **Any Downloader**, a sleek, modern desktop application built to fetch high-quality media from thousands of websites with ease. Powered by `yt-dlp` and featuring a beautiful Material 3 interface via `Flet`.
+Welcome to **Any Downloader**, a sleek, modern desktop application built to fetch high-quality media from thousands of websites with ease. Powered by `yt-dlp` and featuring a vibrant, high-performance desktop interface built with **Python**, **PySide6**, and **Qt 6 / Qt Quick (QML)**.
 
 ---
 
 ## ✨ Features
 
-- 🎨 **Modern UI**: Clean, responsive, and dark-mode focused layout following Material 3 design principles.
-- ⚡ **Robust Backend**: Seamlessly extracts video and audio streams across the web using the powerful `yt-dlp` engine.
-- 🎯 **Format Selection**: Take control of your downloads—choose the best overall quality, grab audio only (MP3), or specify exact video resolutions.
-- 📊 **Real-time Progress**: Stay informed with accurate live updates showing download speed, estimated time of arrival (ETA), and progress bars.
-- 🛠️ **Built-in Post-Processing**: Automatically converts and refines media formats utilizing `ffmpeg`.
+- 🎨 **Modern Windows 11 Design**: Clean, fluid dark-first UI with customizable vibrant accents (Rose, Indigo, Emerald, Amber, Violet, Sky) and smooth micro-animations.
+- ⚡ **Native PySide6 & QML Performance**: High-efficiency asynchronous architecture with instant navigation and zero lag.
+- 🚀 **Robust Engine Support**: Seamlessly extracts video and audio streams from YouTube, Spotify, Apple Music, Instagram, Twitter/X, and 1000+ websites.
+- 🎯 **Full Control Over Media**: Customize formats (MP4, MKV, WebM, MP3, M4A, FLAC, Opus), quality profiles up to 8K, embed thumbnails/subtitles/chapters, and cut intros/sponsors via SponsorBlock.
+- 📊 **Real-time Queue & Progress**: Monitor live download speeds, ETA, detailed log viewer, and manage downloads with pause, resume, stop, and retry.
+- 🛠️ **Automatic FFmpeg Integration**: Self-contained FFmpeg manager with GPU hardware acceleration support (CUDA, QSV, D3D11VA).
 
 ## 📸 Preview
 

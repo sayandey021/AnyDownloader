@@ -4,7 +4,18 @@ import subprocess
 import shutil
 import urllib.request
 
+
+def kill_existing_flet_processes():
+    for exe_name in ("flet.exe", "flet_bin.exe", "AnyDownloaderApp.exe"):
+        try:
+            subprocess.run(["taskkill", "/F", "/IM", exe_name, "/T"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+
 def patch_flet_exe():
+    kill_existing_flet_processes()
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     assets_dir = os.path.abspath(os.path.join(base_dir, "..", "assets"))
     icon_path = os.path.join(assets_dir, "icon.ico")
@@ -97,6 +108,11 @@ def patch_flet_exe():
     except ImportError:
         print("Warning: flet_desktop import failed.")
 
+    # Always refresh the repo-local cache first so dev launches do not stick to a stale white Flet icon.
+    repo_local_dir = os.path.abspath(os.path.join(base_dir, "..", ".flet_view", "flet"))
+    if os.path.isdir(repo_local_dir) and repo_local_dir not in flet_dirs:
+        flet_dirs.insert(0, repo_local_dir)
+
     user_extract_dir = os.path.join(os.path.expanduser("~"), ".AnyDownloader", "flet_view", "flet")
     if os.path.isdir(user_extract_dir) and user_extract_dir not in flet_dirs:
         flet_dirs.append(user_extract_dir)
@@ -109,10 +125,13 @@ def patch_flet_exe():
         curr_flet = os.path.join(f_dir, "flet.exe")
         curr_bin = os.path.join(f_dir, "flet_bin.exe")
 
+        # Kill stale processes before replacing the launcher binary.
+        if os.path.isfile(curr_flet) or os.path.isfile(curr_bin):
+            kill_existing_flet_processes()
+
         # If flet.exe exists and is the original Flutter runner (> 140KB)
         if os.path.isfile(curr_flet):
             sz = os.path.getsize(curr_flet)
-            # If curr_bin doesn't exist or curr_flet is the Flutter binary
             if sz > 140000 and not os.path.isfile(curr_bin):
                 try:
                     shutil.copy2(curr_flet, curr_bin)
@@ -120,7 +139,6 @@ def patch_flet_exe():
                 except Exception as e:
                     print(f"Warning copying to flet_bin.exe: {e}")
 
-        # Patch flet_bin.exe with icon and metadata
         if os.path.isfile(curr_bin):
             for cmd in [
                 [rcedit_path, curr_bin, "--set-icon", icon_path],
@@ -134,15 +152,22 @@ def patch_flet_exe():
                 except Exception:
                     pass
 
-        # Install launcher_exe as flet.exe
+        # Install launcher_exe as flet.exe and force a clean replacement to avoid stale white Flet icon caches.
         if os.path.isfile(launcher_exe):
             try:
+                if os.path.isfile(curr_flet):
+                    backup_flet = curr_flet + ".orig_backup"
+                    if not os.path.exists(backup_flet):
+                        shutil.copy2(curr_flet, backup_flet)
+                    try:
+                        os.remove(curr_flet)
+                    except Exception:
+                        pass
                 shutil.copy2(launcher_exe, curr_flet)
                 print(f"Installed smart launcher as {curr_flet}")
             except Exception as e:
                 print(f"Warning replacing flet.exe: {e}")
 
-            # Patch flet.exe with icon and metadata
             for cmd in [
                 [rcedit_path, curr_flet, "--set-icon", icon_path],
                 [rcedit_path, curr_flet, "--set-version-string", "FileDescription", "Any Downloader"],

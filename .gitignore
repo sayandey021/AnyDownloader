@@ -4,6 +4,7 @@ bin/
 ffmpeg/
 temp/
 __pycache__/
+.flet_view/
 *.pyc
 MsixTemp/
 debug_dl.json

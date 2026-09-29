@@ -14,7 +14,7 @@
   "theme": "dark",
   "accent_color": "Rose",
   "bg_image_path": "/bg_4.png",
-  "bg_image_opacity": 0.1,
+  "bg_image_opacity": 0.28,
   "max_concurrent_downloads": 3,
   "playlist_filename_template": "%(playlist_index)s - %(title)s.%(ext)s",
   "create_playlist_folder": true,
@@ -33,5 +33,5 @@
   "embed_chapters": true,
   "developer_mode": false,
   "engine_update_interval": "weekly",
-  "engine_last_check_time": 1789417158.368011
+  "engine_last_check_time": 1790452158.5863743
 }

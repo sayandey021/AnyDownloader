@@ -12,7 +12,7 @@ class AboutView(ft.Container):
 
     def setup_ui(self):
         def create_button(text, icon, url, color, bgcolor=AppTheme.SURFACE):
-            return ft.ElevatedButton(
+            return ft.Button(
                 text,
                 icon=icon,
                 icon_color=color,
@@ -34,7 +34,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.9.4", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.9.6", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         
@@ -60,7 +60,7 @@ class AboutView(ft.Container):
             italic=True
         )
 
-        kofi_btn = ft.ElevatedButton(
+        kofi_btn = ft.Button(
             "Support me on Ko-fi",
             icon=ft.Icons.COFFEE,
             icon_color=ft.Colors.WHITE,
@@ -158,7 +158,7 @@ class AboutView(ft.Container):
             self._page.update()
 
         version_history_btn = ft.Container(
-            content=ft.ElevatedButton(
+            content=ft.Button(
                 "Version History",
                 icon=ft.Icons.HISTORY_ROUNDED,
                 color=AppTheme.TEXT_PRIMARY,

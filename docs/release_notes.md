@@ -4,7 +4,48 @@ Welcome to the **Any Downloader** release notes! Below is a comprehensive change
 
 ---
 
-## **v1.9.4 - Backend Engine Version Detection & Metadata Packaging Fix** *(Current)*
+## **v1.9.6 - Synchronized Theme Switching & Development Launcher Hardening** *(Current)*
+
+### 🎨 UI & Theme Synchronization
+- **Simultaneous Title Bar and App Theme Transitions**:
+  - Fixed an issue where changing themes (Dark/Light mode, preset accent colors, or background opacity) caused the native Windows title bar to change color first, followed by a noticeable delay before the app body transitioned.
+  - **Root Cause:** In Settings, `apply_native_window_styling()` was called prematurely before constructing the updated view, and `SettingsView._build_ui()` performed a redundant intermediate re-render. Additionally, `rebuild_app()` invoked `refresh_native_title_bar()` before instantiating the new `MainView` control tree, causing the Win32 DWM caption to update several hundred milliseconds earlier than the Flutter client.
+  - **Fix 1 (Direct Theme Rebuild Delegation):** Updated `_on_theme_change` in Settings to directly delegate UI rebuilds to `rebuild_app()`, eliminating premature native styling calls and redundant intermediate component renders.
+  - **Fix 2 (Atomic Update Synchronization):** In `rebuild_app()`, synchronized `refresh_native_title_bar()` to execute concurrently with `self._page.update()` after the new `MainView` tree is mounted. Page-level properties (`theme_mode`, `bgcolor`, `theme`, and `window.brightness`) are updated in the same dispatch packet.
+  - **Fix 3 (Cached HWND & Fast Title Bar Refresh):** Cached the native Win32 window handle (`_cached_native_hwnd`) in `main.py` to eliminate window discovery polling and sleep delays, and added an `update_icons=False` fast-path for theme updates that skips redundant disk I/O and COM Jump List property resets for instantaneous DWM caption updates.
+
+### 🐛 Bug Fixes & Reliability
+- **Taskbar Icon Display & Window Show Deadlock Fix**:
+  - Fixed an issue where the app icon was missing or not showing properly in the Windows taskbar.
+  - **Root Cause:** `await page.window.wait_until_ready_to_show()` hung indefinitely at startup before `page.window.visible = True` was dispatched, preventing `refresh_native_title_bar(update_icons=True)` and native `WM_SETICON`/`GCLP_HICON` from executing. In addition, `SHStrDupW` lacked 64-bit argument prototypes and the `PKEY_AppUserModel_RelaunchIconResource` format required an explicit `,0` resource index.
+  - **Fix:** Guarded `wait_until_ready_to_show()` with an async timeout, set `page.window.visible = True` before icon application, dynamically resolved system DPI metric sizes (`SM_CXICON`/`SM_CYICON` and `SM_CXSMICON`/`SM_CYSMICON`), added 64-bit `SHStrDupW` types, and formatted relaunch icon resources properly with `,0`.
+- **Taskbar Process Icon (PE Resource Embedding + AUMID Registry Fix)**:
+  - Fixed the root cause of the generic white Flet icon persisting in the Windows taskbar button even after `WM_SETICON` was applied.
+  - **Root Cause:** Two independent issues: (1) The Windows taskbar button icon is sourced from the **launcher EXE's embedded PE icon resource** (`RT_ICON` / `RT_GROUP_ICON`), not from `WM_SETICON` messages — `flet.exe` and `flet_bin.exe` retained the default white Flet logo. (2) The Windows Shell resolves the taskbar icon for a given AppUserModelID from `HKCU\Software\Classes\AppUserModelId\<aumid>\IconResource` in the registry. Without a registry entry for `SwiftGrab.AnyDownloader.App`, the Shell had no icon to display and fell back to the generic white-page icon.
+  - **Fix 1 (PE Embedding):** Added `_embed_icon_in_flet_exe()` — a lightweight in-process PE resource patcher using `BeginUpdateResourceA` / `UpdateResourceA` / `EndUpdateResourceA` (ANSI variant required from 64-bit Python for `MAKEINTRESOURCE`-style integer IDs) to replace `RT_ICON` / `RT_GROUP_ICON` entries in `flet.exe` and `flet_bin.exe` with the app's `icon.ico` at startup.
+  - **Fix 2 (AUMID Registry):** `configure_flet_runtime()` now writes `DisplayName`, `IconResource`, and `RelaunchCommand` values to `HKCU\Software\Classes\AppUserModelId\SwiftGrab.AnyDownloader.App` so the Windows Shell resolves the correct icon from the registry immediately — even before the HWND property store is updated. Skipped automatically for MSIX builds (which register their own icons via the package manifest). Followed by `SHChangeNotify(SHCNE_ASSOCCHANGED)` to flush the Shell association cache immediately.
+- **Development Client Launch Hardening (`python main.py`)**:
+  - Fixed an issue where running `python main.py` in development mode exited immediately with code `0` without showing an error or launching the GUI.
+  - **Root Cause:** When `_local_flet_view` was configured, `flet.exe` (the native smart launcher) checked for `flet_bin.exe` (the Flutter runner). Because `flet_bin.exe` was missing in the local directory, `flet.exe` exited with code `1`, causing Flet's socket server to terminate cleanly.
+  - **Fix:** Restored `flet_bin.exe` into `.flet_view\flet` and the global cache, and hardened `main.py` to defensively verify that **both** `flet.exe` and `flet_bin.exe` exist before directing `FLET_VIEW_PATH` to the local development runner directory.
+
+---
+
+## **v1.9.5 - Flet 1.0 Migration & Popup Title Bar Fix**
+
+### 🐛 Bug Fixes & Compatibility
+- **Flet 1.0.1 Migration**:
+  - Updated the Flet dependency and aligned its desktop and CLI packages to the 1.0.1 API.
+  - Replaced removed `ElevatedButton` controls with the supported `Button` control and updated renamed color constants, fixing UI startup failures on Flet 1.x.
+- **Title Bar Dragging While Dialogs Are Open**:
+  - Switched from the custom client-area title bar to the native Windows caption so modal dialogs no longer block window dragging.
+  - Matched the native caption background, text color, and theme updates to the app's active appearance.
+- **Windows Icon Handle Compatibility**:
+  - Declared pointer-sized Windows API signatures when applying window and taskbar icons to avoid handle truncation on 64-bit Windows.
+
+---
+
+## **v1.9.4 - Backend Engine Version Detection & Metadata Packaging Fix**
 
 ### 🐛 Bug Fixes
 - **Backend Engine Detection on Clean/New PCs**:

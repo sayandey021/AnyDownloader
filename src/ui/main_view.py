@@ -150,7 +150,7 @@ class MainView(ft.Container):
             on_submit=self.fetch_info
         )
         
-        self.fetch_btn = ft.ElevatedButton(
+        self.fetch_btn = ft.Button(
             "Search",
             icon=ft.Icons.SEARCH_ROUNDED,
             style=ft.ButtonStyle(
@@ -166,7 +166,7 @@ class MainView(ft.Container):
         self.input_row = ft.Row([self.url_input, self.loading_ring, self.fetch_btn], spacing=15, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
         def create_toolbar_btn(btn_text, icon, color, on_click):
-            return ft.ElevatedButton(
+            return ft.Button(
                 btn_text,
                 icon=icon,
                 on_click=on_click,
@@ -675,6 +675,12 @@ class MainView(ft.Container):
         if title_bar and hasattr(title_bar, 'update_theme'):
             title_bar.update_theme()
 
+        # Update page-level theme properties for Flutter
+        self._page.bgcolor = AppTheme.BACKGROUND
+        self._page.theme = AppTheme.get_theme()
+        self._page.theme_mode = ft.ThemeMode.LIGHT if AppTheme.MODE == 'light' else ft.ThemeMode.DARK
+        self._page.window.brightness = ft.Brightness.DARK if AppTheme.MODE == 'dark' else ft.Brightness.LIGHT
+
         # Hot-swap the entire MainView on the page to instantly apply the new theme globally
         self._page.controls.clear()
         
@@ -697,6 +703,14 @@ class MainView(ft.Container):
             self._page.add(ft.Column([title_bar, new_view], spacing=0, expand=True))
         else:
             self._page.add(new_view)
+
+        # Commit UI update to Flutter engine
+        self._page.update()
+
+        # Update native Windows title bar simultaneously with the UI
+        refresh_native_title_bar = getattr(self._page, 'refresh_native_title_bar', None)
+        if refresh_native_title_bar:
+            refresh_native_title_bar()
 
         if show_notification:
             new_view.show_snack("Theme applied!", AppTheme.SUCCESS)
