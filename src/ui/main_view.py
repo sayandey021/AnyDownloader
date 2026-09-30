@@ -150,7 +150,7 @@ class MainView(ft.Container):
             on_submit=self.fetch_info
         )
         
-        self.fetch_btn = ft.ElevatedButton(
+        self.fetch_btn = ft.FilledButton(
             "Search",
             icon=ft.Icons.SEARCH_ROUNDED,
             style=ft.ButtonStyle(
@@ -166,7 +166,7 @@ class MainView(ft.Container):
         self.input_row = ft.Row([self.url_input, self.loading_ring, self.fetch_btn], spacing=15, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
         def create_toolbar_btn(btn_text, icon, color, on_click):
-            return ft.ElevatedButton(
+            return ft.FilledButton(
                 btn_text,
                 icon=icon,
                 on_click=on_click,

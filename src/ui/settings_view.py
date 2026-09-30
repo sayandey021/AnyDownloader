@@ -416,28 +416,28 @@ class SettingsView(ft.Container):
             on_click=lambda e: self._browse_file('cookies_path', self.cookies_path_field),
         )
 
-        login_insta_btn = ft.ElevatedButton(
+        login_insta_btn = ft.FilledButton(
             "Login to Instagram",
             icon=ft.Icons.CAMERA_ALT_ROUNDED,
             on_click=lambda e: self._login_browser('https://www.instagram.com/'),
             bgcolor=AppTheme.SURFACE_VARIANT,
             color=AppTheme.TEXT_PRIMARY
         )
-        login_fb_btn = ft.ElevatedButton(
+        login_fb_btn = ft.FilledButton(
             "Login to Facebook",
             icon=ft.Icons.FACEBOOK_ROUNDED,
             on_click=lambda e: self._login_browser('https://www.facebook.com/'),
             bgcolor=AppTheme.SURFACE_VARIANT,
             color=AppTheme.TEXT_PRIMARY
         )
-        login_x_btn = ft.ElevatedButton(
+        login_x_btn = ft.FilledButton(
             "Login to X (Twitter)",
             icon=ft.Icons.ALTERNATE_EMAIL_ROUNDED,
             on_click=lambda e: self._login_browser('https://x.com/'),
             bgcolor=AppTheme.SURFACE_VARIANT,
             color=AppTheme.TEXT_PRIMARY
         )
-        login_yt_btn = ft.ElevatedButton(
+        login_yt_btn = ft.FilledButton(
             "Login to YouTube",
             icon=ft.Icons.PLAY_CIRCLE_FILL_ROUNDED,
             on_click=lambda e: self._login_browser('https://www.youtube.com/'),
@@ -495,7 +495,7 @@ class SettingsView(ft.Container):
             tooltip="Query PyPI for newer versions of yt-dlp, spotdl, and curl_cffi"
         )
 
-        self.update_engines_btn = ft.ElevatedButton(
+        self.update_engines_btn = ft.FilledButton(
             "Update Engines Now",
             icon=ft.Icons.UPGRADE_ROUNDED,
             style=ft.ButtonStyle(
@@ -771,7 +771,7 @@ class SettingsView(ft.Container):
                     ft.Image(src=img_path, fit="cover", width=120, height=68, border_radius=6),
                     ft.Container(
                         content=ft.Text(label, size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                        bgcolor=ft.Colors.BLACK54,
+                        bgcolor=ft.Colors.BLACK_54,
                         padding=ft.Padding(4, 2, 4, 2),
                         border_radius=4,
                         bottom=4, right=4
@@ -801,7 +801,7 @@ class SettingsView(ft.Container):
             ft.Text("Background Image", size=14, weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
             demo_thumbs,
             ft.Row([
-                ft.ElevatedButton("Browse Local Image...", icon=ft.Icons.FOLDER_OPEN_ROUNDED, 
+                ft.FilledButton("Browse Local Image...", icon=ft.Icons.FOLDER_OPEN_ROUNDED, 
                                   on_click=_browse_bg_image),
                 ft.TextButton("Clear Background", icon=ft.Icons.CLEAR_ROUNDED, on_click=lambda _: _set_bg_image(''), style=ft.ButtonStyle(color=AppTheme.ERROR))
             ]),
@@ -898,7 +898,7 @@ class SettingsView(ft.Container):
             import threading
             threading.Thread(target=fix_task, daemon=True).start()
 
-        fix_btn = ft.ElevatedButton(
+        fix_btn = ft.FilledButton(
             "Fix Missing",
             icon=ft.Icons.AUTO_FIX_HIGH_ROUNDED,
             on_click=_fix_dependencies,
@@ -962,7 +962,7 @@ class SettingsView(ft.Container):
                 dll_text.value = f"Error fetching DLLs: {ex}"
             dll_text.update()
 
-        load_dlls_btn = ft.ElevatedButton("Load System DLLs", icon=ft.Icons.DATA_OBJECT_ROUNDED, on_click=_load_dlls, bgcolor=AppTheme.SURFACE_VARIANT, color=AppTheme.TEXT_PRIMARY)
+        load_dlls_btn = ft.FilledButton("Load System DLLs", icon=ft.Icons.DATA_OBJECT_ROUNDED, on_click=_load_dlls, bgcolor=AppTheme.SURFACE_VARIANT, color=AppTheme.TEXT_PRIMARY)
 
         advanced_expansion = ft.ExpansionTile(
             title=ft.Text("Advanced Diagnostics & DLLs", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
@@ -981,7 +981,7 @@ class SettingsView(ft.Container):
             ]
         )
 
-        refresh_btn = ft.ElevatedButton(
+        refresh_btn = ft.FilledButton(
             "Refresh Status",
             icon=ft.Icons.REFRESH_ROUNDED,
             on_click=_update_troubleshoot_ui,
@@ -1436,7 +1436,7 @@ class SettingsView(ft.Container):
                         ft.Text(p[1], color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.W_600, size=13),
                         ft.Text(f"Code: {p[0]} — {p[2]}", color=AppTheme.TEXT_SECONDARY, size=11),
                     ], spacing=2, expand=True),
-                    ft.ElevatedButton(
+                    ft.FilledButton(
                         "Apply",
                         icon=ft.Icons.CHECK_ROUNDED,
                         style=ft.ButtonStyle(
@@ -1534,7 +1534,7 @@ class SettingsView(ft.Container):
                         ft.Text(f"Format: {t[0]}", color=AppTheme.ACCENT, size=11, weight=ft.FontWeight.W_500),
                         ft.Text(f"Example: {t[2]}", color=AppTheme.TEXT_SECONDARY, size=11),
                     ], spacing=2, expand=True),
-                    ft.ElevatedButton(
+                    ft.FilledButton(
                         "Apply",
                         icon=ft.Icons.CHECK_ROUNDED,
                         style=ft.ButtonStyle(

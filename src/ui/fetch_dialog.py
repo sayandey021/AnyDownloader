@@ -287,7 +287,7 @@ class FetchDialog(ft.AlertDialog):
                     padding=ft.Padding(left=16, right=16, top=12, bottom=12),
                 ),
             ),
-            ft.ElevatedButton(
+            ft.FilledButton(
                 "Record Stream" if self.is_live else "Download",
                 icon=ft.Icons.FIBER_MANUAL_RECORD if self.is_live else ft.Icons.DOWNLOAD_ROUNDED,
                 bgcolor=AppTheme.PRIMARY,
@@ -1309,7 +1309,7 @@ class FetchDialog(ft.AlertDialog):
                         ft.Text(p[1], color=AppTheme.TEXT_PRIMARY, weight=ft.FontWeight.W_600, size=13),
                         ft.Text(f"Code: {p[0]} — {p[2]}", color=AppTheme.TEXT_SECONDARY, size=11),
                     ], spacing=2, expand=True),
-                    ft.ElevatedButton(
+                    ft.FilledButton(
                         "Apply",
                         icon=ft.Icons.CHECK_ROUNDED,
                         style=ft.ButtonStyle(

@@ -81,6 +81,8 @@ def _ensure_dependencies():
 _ensure_dependencies()
 
 import flet as ft
+if not hasattr(ft, "ElevatedButton"):
+    ft.ElevatedButton = getattr(ft, "FilledButton", getattr(ft, "Button", None))
 import threading
 from PIL import Image
 import pystray
@@ -260,9 +262,22 @@ def get_app_user_model_id():
 def configure_flet_runtime():
     if sys.platform == "win32":
         aumid = get_app_user_model_id()
+        assets_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
+        icon_path = os.path.join(assets_dir, "icon.ico")
+        relaunch_cmd = sys.executable if getattr(sys, 'frozen', False) else f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+
         os.environ["FLET_APP_USER_MODEL_ID"] = aumid
+        os.environ["FLET_APP_RELAUNCH_COMMAND"] = relaunch_cmd
+        os.environ["FLET_APP_RELAUNCH_DISPLAY_NAME"] = "Any Downloader"
+        os.environ["FLET_APP_RELAUNCH_ICON"] = f"{icon_path},0"
+
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(aumid)
+        except Exception:
+            pass
+        try:
+            register_aumid_in_registry(aumid, icon_path)
+            ensure_start_menu_shortcut(aumid, icon_path)
         except Exception:
             pass
 
@@ -374,6 +389,141 @@ _IPropertyStoreVtbl._fields_ = [
     ("Commit", _STDMETHOD),
 ]
 
+_CLSID_ShellLink = _GUID(0x00021401, 0, 0, (wintypes.BYTE * 8)(0xc0, 0, 0, 0, 0, 0, 0, 0x46))
+_IID_IShellLinkW = _GUID(0x000214F9, 0, 0, (wintypes.BYTE * 8)(0xc0, 0, 0, 0, 0, 0, 0, 0x46))
+_IID_IPersistFile = _GUID(0x0000010b, 0, 0, (wintypes.BYTE * 8)(0xc0, 0, 0, 0, 0, 0, 0, 0x46))
+
+class _IShellLinkWVtbl(ctypes.Structure):
+    pass
+
+class _IShellLinkW(ctypes.Structure):
+    _fields_ = [("lpVtbl", ctypes.POINTER(_IShellLinkWVtbl))]
+
+_IShellLinkWVtbl._fields_ = [
+    ("QueryInterface", ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(_GUID), ctypes.c_void_p)),
+    ("AddRef", _STDMETHOD),
+    ("Release", _STDMETHOD),
+    ("GetPath", _STDMETHOD),
+    ("GetIDList", _STDMETHOD),
+    ("SetIDList", _STDMETHOD),
+    ("GetDescription", _STDMETHOD),
+    ("SetDescription", ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, wintypes.LPCWSTR)),
+    ("GetWorkingDirectory", _STDMETHOD),
+    ("SetWorkingDirectory", ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, wintypes.LPCWSTR)),
+    ("GetArguments", _STDMETHOD),
+    ("SetArguments", ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, wintypes.LPCWSTR)),
+    ("GetHotkey", _STDMETHOD),
+    ("SetHotkey", _STDMETHOD),
+    ("GetShowCmd", _STDMETHOD),
+    ("SetShowCmd", _STDMETHOD),
+    ("GetIconLocation", _STDMETHOD),
+    ("SetIconLocation", ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, wintypes.LPCWSTR, ctypes.c_int)),
+    ("SetRelativePath", _STDMETHOD),
+    ("Resolve", _STDMETHOD),
+    ("SetPath", ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, wintypes.LPCWSTR)),
+]
+
+class _IPersistFileVtbl(ctypes.Structure):
+    pass
+
+class _IPersistFile(ctypes.Structure):
+    _fields_ = [("lpVtbl", ctypes.POINTER(_IPersistFileVtbl))]
+
+_IPersistFileVtbl._fields_ = [
+    ("QueryInterface", _STDMETHOD),
+    ("AddRef", _STDMETHOD),
+    ("Release", _STDMETHOD),
+    ("GetClassID", _STDMETHOD),
+    ("IsDirty", _STDMETHOD),
+    ("Load", ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, wintypes.LPCWSTR, wintypes.DWORD)),
+    ("Save", ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, wintypes.LPCWSTR, wintypes.BOOL)),
+    ("SaveCompleted", _STDMETHOD),
+    ("GetCurFile", _STDMETHOD),
+]
+
+def ensure_start_menu_shortcut(aumid, icon_path=None, app_name="Any Downloader"):
+    if sys.platform != "win32":
+        return
+    try:
+        ole32 = ctypes.windll.ole32
+        shell32 = ctypes.windll.shell32
+        shlwapi = ctypes.windll.shlwapi
+
+        appdata = os.environ.get("APPDATA")
+        if not appdata:
+            return
+        programs = os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs")
+        os.makedirs(programs, exist_ok=True)
+        shortcut_path = os.path.join(programs, f"{app_name}.lnk")
+
+        abs_icon = os.path.abspath(icon_path) if icon_path and os.path.exists(icon_path) else None
+        target_exe = sys.executable
+        args = "" if getattr(sys, 'frozen', False) else f'"{os.path.abspath(__file__)}"'
+        work_dir = os.path.dirname(os.path.abspath(__file__))
+
+        ole32.CoInitialize(None)
+
+        p_sl = ctypes.POINTER(_IShellLinkW)()
+        hr = ole32.CoCreateInstance(ctypes.byref(_CLSID_ShellLink), None, 1, ctypes.byref(_IID_IShellLinkW), ctypes.byref(p_sl))
+        if hr != 0 or not p_sl:
+            return
+
+        sl = p_sl.contents
+        sl_vtbl = sl.lpVtbl.contents
+
+        sl_vtbl.SetPath(p_sl, target_exe)
+        if args:
+            sl_vtbl.SetArguments(p_sl, args)
+        sl_vtbl.SetWorkingDirectory(p_sl, work_dir)
+        if abs_icon:
+            sl_vtbl.SetIconLocation(p_sl, abs_icon, 0)
+        sl_vtbl.SetDescription(p_sl, app_name)
+
+        # Bind AUMID to the shortcut
+        p_ps = ctypes.POINTER(_IPropertyStore)()
+        qi_hr = sl_vtbl.QueryInterface(p_sl, ctypes.byref(_IID_IPropertyStore), ctypes.byref(p_ps))
+        if qi_hr == 0 and p_ps:
+            ps = p_ps.contents
+            ps_vtbl = ps.lpVtbl.contents
+            pv = _PROPVARIANT()
+            p_str = wintypes.LPWSTR()
+            if shlwapi.SHStrDupW(str(aumid), ctypes.byref(p_str)) == 0:
+                pv.vt = 31
+                pv.pwszVal = p_str
+                ps_vtbl.SetValue(p_ps, ctypes.byref(_PKEY_AppUserModel_ID), ctypes.byref(pv))
+                ps_vtbl.Commit(p_ps)
+                ole32.PropVariantClear(ctypes.byref(pv))
+            ps_vtbl.Release(p_ps)
+
+        # Save the shortcut
+        p_pf = ctypes.POINTER(_IPersistFile)()
+        qi_hr2 = sl_vtbl.QueryInterface(p_sl, ctypes.byref(_IID_IPersistFile), ctypes.byref(p_pf))
+        if qi_hr2 == 0 and p_pf:
+            pf = p_pf.contents
+            pf_vtbl = pf.lpVtbl.contents
+            pf_vtbl.Save(p_pf, shortcut_path, True)
+            pf_vtbl.Release(p_pf)
+
+        sl_vtbl.Release(p_sl)
+        shell32.SHChangeNotify(0x08000000, 0, None, None)
+    except Exception as e:
+        print(f"[Shortcut] Setup error: {e}")
+
+def register_aumid_in_registry(aumid, icon_path=None, app_name="Any Downloader"):
+    if sys.platform != "win32":
+        return
+    try:
+        import winreg
+        key_path = rf"Software\Classes\AppUserModelId\{aumid}"
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_WRITE) as key:
+            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, app_name)
+            if icon_path and os.path.exists(icon_path):
+                abs_ico = os.path.abspath(icon_path)
+                winreg.SetValueEx(key, "IconUri", 0, winreg.REG_SZ, abs_ico)
+                winreg.SetValueEx(key, "IconPath", 0, winreg.REG_SZ, abs_ico)
+    except Exception as e:
+        print(f"[AUMID] Registry setup error: {e}")
+
 def set_window_relaunch_properties(hwnd, aumid, relaunch_cmd, display_name="Any Downloader", icon_res=None):
     if sys.platform != "win32":
         return False
@@ -412,7 +562,10 @@ def set_window_relaunch_properties(hwnd, aumid, relaunch_cmd, display_name="Any 
                 ole32.PropVariantClear(ctypes.byref(pv))
 
             if icon_res:
-                pv = _make_prop(icon_res)
+                formatted_icon = str(icon_res)
+                if "," not in formatted_icon:
+                    formatted_icon = f"{os.path.abspath(formatted_icon)},0"
+                pv = _make_prop(formatted_icon)
                 vtbl.SetValue(pps, ctypes.byref(_PKEY_AppUserModel_RelaunchIconResource), ctypes.byref(pv))
                 ole32.PropVariantClear(ctypes.byref(pv))
 
@@ -439,7 +592,7 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
         dwmapi = ctypes.windll.dwmapi
         
         hwnd = None
-        for _ in range(50):
+        for _ in range(60):
             hwnd = user32.FindWindowW("FLUTTER_RUNNER_WIN32_WINDOW", window_title)
             if not hwnd:
                 hwnd = user32.FindWindowW(None, window_title)
@@ -468,40 +621,54 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
         # 2. Native Win32 window icons (Titlebar small icon + Taskbar big icon)
         if icon_path and os.path.exists(icon_path):
             try:
+                abs_icon = os.path.abspath(icon_path)
                 WM_SETICON = 0x0080
                 ICON_SMALL = 0
                 ICON_BIG = 1
                 IMAGE_ICON = 1
                 LR_LOADFROMFILE = 0x0010
 
-                h_sm = user32.LoadImageW(None, icon_path, IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
+                # Configure 64-bit function prototypes for ctypes safety
+                SetClassLongPtrW = getattr(user32, "SetClassLongPtrW", getattr(user32, "SetClassLongW", None))
+                if SetClassLongPtrW:
+                    SetClassLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
+                    SetClassLongPtrW.restype = ctypes.c_void_p
+
+                user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+
+                h_sm = user32.LoadImageW(None, abs_icon, IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
                 if h_sm:
                     user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, h_sm)
-                    try:
-                        user32.SetClassLongPtrW(hwnd, -34, h_sm)  # GCLP_HICONSM
-                    except Exception:
-                        pass
+                    if SetClassLongPtrW:
+                        try:
+                            SetClassLongPtrW(hwnd, -34, h_sm)  # GCLP_HICONSM
+                        except Exception:
+                            pass
 
-                h_bg = user32.LoadImageW(None, icon_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
+                h_bg = user32.LoadImageW(None, abs_icon, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
                 if h_bg:
                     user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_bg)
-                    try:
-                        user32.SetClassLongPtrW(hwnd, -14, h_bg)  # GCLP_HICON
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+                    if SetClassLongPtrW:
+                        try:
+                            SetClassLongPtrW(hwnd, -14, h_bg)  # GCLP_HICON
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"[NativeStyling] Window icon error: {e}")
 
         # 3. Taskbar Jump List & AppUserModelID properties
         try:
             aumid = get_app_user_model_id()
+            register_aumid_in_registry(aumid, icon_path, app_name=window_title)
+            ensure_start_menu_shortcut(aumid, icon_path, app_name=window_title)
             relaunch_cmd = sys.executable if getattr(sys, 'frozen', False) else f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+            formatted_icon = f"{os.path.abspath(icon_path)},0" if icon_path and os.path.exists(icon_path) else None
             set_window_relaunch_properties(
                 hwnd,
                 aumid=aumid,
                 relaunch_cmd=relaunch_cmd,
                 display_name=window_title,
-                icon_res=icon_path
+                icon_res=formatted_icon
             )
         except Exception as e:
             print(f"[NativeStyling] Property store error: {e}")
@@ -511,15 +678,7 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
 configure_flet_runtime()
 
 
-# In development mode, use the patched .flet_view so the taskbar shows
-# the correct app icon and name instead of the default Flet branding.
-if not getattr(sys, 'frozen', False):
-    _local_flet_view = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), ".flet_view", "flet"
-    )
-    if os.path.isfile(os.path.join(_local_flet_view, "flet.exe")):
-        os.environ.setdefault("FLET_VIEW_PATH", _local_flet_view)
-
+# Ensure repository root is on sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.ui.theme import AppTheme
@@ -622,7 +781,7 @@ async def main(page: ft.Page):
     icon_ico_path = os.path.join(assets_dir, "icon.ico")
 
     page.title = "Any Downloader"
-    page.window.icon = icon_ico_path if os.path.exists(icon_ico_path) else "icon.ico"
+    page.window.icon = "icon.ico"
     page.window.brightness = ft.Brightness.DARK if AppTheme.MODE == 'dark' else ft.Brightness.LIGHT
     page.width = 900
     page.height = 700
@@ -866,7 +1025,7 @@ async def main(page: ft.Page):
                 def exit_app(e):
                     force_exit_app()
                     
-                restart_btn = ft.ElevatedButton(
+                restart_btn = ft.FilledButton(
                     "Exit Application",
                     icon=ft.Icons.EXIT_TO_APP_ROUNDED,
                     bgcolor=AppTheme.PRIMARY,
@@ -908,6 +1067,7 @@ async def main(page: ft.Page):
         pass
     page.window.visible = True
     page.update()
+    apply_native_window_styling("Any Downloader", icon_ico_path, dark=(AppTheme.MODE == 'dark'))
 if __name__ == "__main__":
     if not init_single_instance():
         sys.exit(0)
