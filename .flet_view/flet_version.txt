@@ -1,1 +1,1 @@
-flet-desktop-full-0.86.5
+flet-desktop-full-1.0.1

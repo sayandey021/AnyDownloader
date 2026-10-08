@@ -1,5 +1,6 @@
 import flet as ft
 from src.ui.theme import AppTheme
+from src.ui.bug_report_dialog import open_bug_report_dialog
 
 class AboutView(ft.Container):
     def __init__(self, page: ft.Page):
@@ -11,7 +12,7 @@ class AboutView(ft.Container):
         self.setup_ui()
 
     def setup_ui(self):
-        def create_button(text, icon, url, color, bgcolor=AppTheme.SURFACE):
+        def create_button(text, icon, url=None, color=None, bgcolor=AppTheme.SURFACE, on_click=None):
             return ft.FilledButton(
                 text,
                 icon=icon,
@@ -22,7 +23,8 @@ class AboutView(ft.Container):
                     shape=ft.RoundedRectangleBorder(radius=20),
                     padding=ft.padding.Padding(20, 15, 20, 15)
                 ),
-                url=url
+                url=url,
+                on_click=on_click
             )
 
         # Main Logo
@@ -34,7 +36,7 @@ class AboutView(ft.Container):
         )
 
         title = ft.Text("Any Downloader", size=32, weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY)
-        version = ft.Text("Version 1.9.4", size=16, color=AppTheme.TEXT_SECONDARY)
+        version = ft.Text("Version 1.9.6", size=16, color=AppTheme.TEXT_SECONDARY)
         
         developer = ft.Text("Developed by Sayan Dey", size=18, color=AppTheme.TEXT_PRIMARY)
         
@@ -48,7 +50,7 @@ class AboutView(ft.Container):
         buttons_row = ft.Row([
             create_button("GitHub", ft.Icons.CODE, "https://github.com/sayandey021/AnyDownloader", ft.Colors.WHITE),
             create_button("LinkedIn", ft.Icons.LINK, "https://www.linkedin.com/in/sayan-dey021/", ft.Colors.BLUE_400),
-            create_button("Report a Bug", ft.Icons.BUG_REPORT_ROUNDED, "https://github.com/sayandey021/AnyDownloader/issues", ft.Colors.RED_400),
+            create_button("Report a Bug", ft.Icons.BUG_REPORT_ROUNDED, url=None, color=ft.Colors.RED_400, on_click=lambda e: open_bug_report_dialog(self._page)),
             create_button("Rate the App", ft.Icons.STAR_ROUNDED, "ms-windows-store://review/?ProductId=9N8S0WBRF23F", ft.Colors.YELLOW_600)
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=15, wrap=True)
 
@@ -90,7 +92,10 @@ class AboutView(ft.Container):
 
         def _show_version_history(e):
             changelog_content = ft.Column([
-                ft.Text("v1.9.4 (Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("v1.9.6 (Current)", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
+                ft.Text("• Infinite process recursion fix: Added multi-layered recursion guards & process identity checks to flet_launcher.\n• Fixed Windows taskbar blank icon via persistent icon caching, registry IconResource sync, and implicit shortcut self-healing.\n• Hardened packaging pipeline with binary signature validation to guarantee runner and launcher cannot be cross-copied.\n• Startup self-healing: Automatically detects and purges corrupted launcher binaries from user cache.\n• Microsoft Store v1.9.6.0 update for smooth launch without extra processes.", color=AppTheme.TEXT_SECONDARY, size=13),
+                ft.Divider(color=AppTheme.SURFACE_VARIANT),
+                ft.Text("v1.9.4", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),
                 ft.Text("• Fixed backend engine version detection (yt-dlp & spotdl) showing 'Not Installed' in packaged executable on clean PCs.\n• Bundled package dist-info metadata in PyInstaller build scripts.\n• Single-instance enforcement: relaunching from taskbar or shortcut restores & brings existing window to front instead of opening a duplicate.\n• Fixed taskbar right-click menu icon blue border/plate by adding unplated MSIX assets and PRI indexing.\n• Fixed version string formatting in Settings and force-refresh on manual update checks.", color=AppTheme.TEXT_SECONDARY, size=13),
                 ft.Divider(color=AppTheme.SURFACE_VARIANT),
                 ft.Text("v1.9.3", weight=ft.FontWeight.BOLD, color=AppTheme.PRIMARY),

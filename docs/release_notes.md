@@ -4,7 +4,53 @@ Welcome to the **Any Downloader** release notes! Below is a comprehensive change
 
 ---
 
-## **v1.9.4 - Backend Engine Version Detection & Metadata Packaging Fix** *(Current)*
+## **v1.9.6 - Process Recursion Loop & Taskbar Blank Icon Fix** *(Current)*
+
+### 🐛 Critical Bug Fixes
+- **Infinite Launcher Process Recursion Loop Hotfix (`flet_launcher.exe` / `flet_bin.exe`)**:
+  - In version 1.9.5.0, our build pipeline experienced an issue where our smart taskbar launcher wrapper (`flet_launcher.exe`) inadvertently overwrote the internal Flutter engine runner (`flet_bin.exe`). Because `flet_launcher.exe` delegates launch arguments to `flet_bin.exe`, having both binaries share the launcher logic without an explicit recursion guard caused each instance to spawn another instance of itself in an infinite loop.
+  - Additionally, because the packaged installer bundles this directory into `%USERPROFILE%\.AnyDownloader\flet_view\`, deleting the folder simply caused the app to unpack the flawed executables again on the next run.
+  - **Resolution & Technical Implementation:**
+    - **1. Multi-Layered Recursion Guards & Process Identity Checks:** Hardened the native C# launcher (`flet_launcher.cs` / `flet.exe`) with four distinct layers of recursion guards to guarantee it can never trigger a self-spawn loop under any circumstance:
+      - *Environment Variable Guard:* Sets `FLET_LAUNCHER_ACTIVE=1` before child execution; any child process inheriting this environment immediately terminates if it attempts to execute launcher logic again.
+      - *Binary Name Check:* If running under the name `flet_bin.exe`, execution halts immediately to prevent running launcher wrapper code as the engine runner.
+      - *Self-Spawn Prevention:* Performs canonical path resolution ensuring the target executable path is never identical to the executing process.
+      - *Binary Identity & Metadata Verification:* Inspects `FileVersionInfo` on target binaries to guarantee `flet.exe` never delegates execution to another instance of `flet_launcher.exe`.
+    - **2. Packaging Pipeline Hardening & Build Gates:** Upgraded build scripts (`scripts/custom_pack.py` and `scripts/patch_flet_exe.py`) with strict binary signature validation:
+      - Added automated binary signature scanners (`_is_flutter_runner` vs. `_is_flet_launcher`) to detect PE headers for `FletLauncher` / `_CorExeMain` signatures vs. genuine Flutter runner bytecode.
+      - Introduced strict build gate assertions in `custom_pack.py` that immediately fail packaging if `flet_bin.exe` is missing or matches launcher signatures, ensuring the Flutter runner (`flet_bin.exe`) and the launcher wrapper (`flet.exe`) cannot be cross-copied or corrupted.
+      - Automated global Flet cache sanitization to guarantee pristine Flutter binaries before build bundling.
+    - **3. Startup Self-Healing & Corrupted Cache Purge:** Integrated self-healing logic into app startup in `main.py` (`configure_flet_runtime`):
+      - Scans and detects corrupted launcher binaries in `%USERPROFILE%\.AnyDownloader\flet_view\` on application startup.
+      - Automatically wipes and purges corrupted launcher copies from `%USERPROFILE%\.AnyDownloader\` before initializing the application, ensuring seamless recovery on upgraded systems.
+      - Strictly routes `FLET_VIEW_PATH` only to genuine Flutter runner binaries.
+- **Windows Taskbar Blank Document Icon Fix (`AppUserModelID` & Icon Persistence)**:
+  - Fixed an issue where the Windows taskbar displayed a generic blank white document icon for running instances even though the window header and thumbnail preview showed the correct icon.
+  - **Root Cause:**
+    - Windows Shell associates taskbar icons via the window's explicit `AppUserModelID` (`SwiftGrab.AnyDownloader.App`). When resolving this ID, Windows checks cached implicit shortcuts in `%APPDATA%\Microsoft\Internet Explorer\Quick Launch\User Pinned\ImplicitAppShortcuts\` and registry keys in `HKCU\Software\Classes\AppUserModelId\`.
+    - In packaged executable builds, `icon_path` resolved into PyInstaller's transient extraction folder (`%TEMP%\_MEIxxxxxx\assets\icon.ico`), causing Windows to cache an implicit taskbar shortcut referencing that temporary folder. Once the process terminated and `_MEIxxxxxx` was cleaned up, the cached shortcut was left with a dead path, causing Windows to fall back to the generic blank paper icon.
+    - Additionally, the registry `IconResource` value pointed to an obsolete path, and `register_aumid_in_registry` did not overwrite `IconResource`.
+  - **Fix 1 (Permanent Icon Persistence):** Added `get_persistent_icon_path()` in `main.py` to copy the application icon to a static user directory (`%USERPROFILE%\.AnyDownloader\app_icon.ico`) that permanently survives PyInstaller session cleanups and directory relocations.
+  - **Fix 2 (Implicit Taskbar Shortcut Repair):** Added `repair_implicit_app_shortcuts()` to automatically inspect `%APPDATA%\Microsoft\Internet Explorer\Quick Launch\User Pinned\ImplicitAppShortcuts\`, repairing stale shortcuts to point to the persistent icon and purging corrupt caches.
+  - **Fix 3 (Registry AUMID IconResource Alignment):** Updated `register_aumid_in_registry()` to explicitly set `IconResource` (`<path>,0`) alongside `IconUri` and `IconPath`, ensuring Windows Explorer retrieves the verified permanent icon.
+  - **Fix 4 (DPI-Aware 64-bit Window Icon Stamping):** Corrected `user32.LoadImageW` ctypes return type to `wintypes.HANDLE` (preventing 64-bit pointer truncation), added dynamic system DPI metric queries (`SM_CXICON`, `SM_CYICON`, `SM_CXSMICON`, `SM_CYSMICON`), and emitted `SHChangeNotify(SHCNE_ASSOCCHANGED)` to prompt Windows Explorer to refresh its icon cache immediately.
+
+### ✨ New Features
+- **Native In-App Bug Report System (Serverless Webhook / Direct to Developer)**:
+  - Added a streamlined, friction-free bug report system directed to `saayanstudiosoft@gmail.com`.
+  - **Native Modal Dialog:** Clicking *Report a Bug* opens a sleek Fluent UI dialog directly inside Any Downloader without leaving the app or requiring desktop email clients (Outlook, Thunderbird).
+  - **Automated Diagnostics & Logs:** Automatically gathers non-sensitive system info (Windows build, architecture, Python & Flet versions, backend engine versions, FFmpeg status) and the last 50 lines of debug logs (`any_downloader_debug.log` and in-memory ring buffer).
+  - **Transparent Data Inspection:** Includes an expandable preview so users can review the bundled diagnostic data before sending.
+  - **Zero-Cost Serverless Webhook:** Integrates with Google Apps Script (`scripts/google_apps_script.js`), providing a free REST endpoint that forwards reports as formatted HTML emails to Gmail with direct `Reply-To` support.
+  - **Offline & Fallback Safety:** In offline or unconfigured states, provides 1-click fallback buttons to copy the full markdown report to clipboard, open default mail client, or visit GitHub Issues.
+  - **Settings Integration:** Configurable webhook URL in Settings -> Troubleshoot tab.
+
+- **Microsoft Store Update Notice**:
+  - Releasing **v1.9.6.0** directly to the Microsoft Store to address this immediately. Once the update is live in the Store, please update the app and it will launch smoothly without creating extra processes.
+
+---
+
+## **v1.9.4 - Backend Engine Version Detection & Metadata Packaging Fix**
 
 ### 🐛 Bug Fixes
 - **Backend Engine Detection on Clean/New PCs**:

@@ -21,10 +21,15 @@ rcedit_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "rcedit-x6
 
 def safe_update(exe_path, product_name, file_description, product_version, file_version, company_name, copyright):
     print(f"--- INTERCEPTED update_flet_view_version_info for {exe_path} ---")
-    targets = [exe_path]
     flet_bin = os.path.join(os.path.dirname(exe_path), "flet_bin.exe")
-    if os.path.isfile(flet_bin):
-        targets.append(flet_bin)
+    if not os.path.isfile(flet_bin):
+        raise RuntimeError(f"Build Gate Error: flet_bin.exe missing in {os.path.dirname(exe_path)}!")
+    with open(flet_bin, "rb") as bf:
+        bdata = bf.read()
+        if b"FletLauncher" in bdata or b"_CorExeMain" in bdata:
+            raise RuntimeError(f"Build Gate Error: flet_bin.exe is corrupted with flet_launcher in {os.path.dirname(exe_path)}! Packaging aborted.")
+
+    targets = [exe_path, flet_bin]
 
     if os.path.exists(rcedit_path):
         for target in targets:

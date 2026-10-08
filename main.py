@@ -259,11 +259,43 @@ def get_app_user_model_id():
         return msix_id
     return "SwiftGrab.AnyDownloader.App"
 
+def get_persistent_icon_path():
+    """
+    Returns a guaranteed, permanent absolute path to icon.ico in the user's
+    application directory (%USERPROFILE%\\.AnyDownloader\\app_icon.ico).
+    This ensures Windows Shell, Taskbar grouping, and Jump Lists never reference
+    transient PyInstaller temp folders (_MEIPASS) that vanish on exit.
+    """
+    user_dir = os.path.join(os.path.expanduser("~"), ".AnyDownloader")
+    os.makedirs(user_dir, exist_ok=True)
+    dest_icon = os.path.join(user_dir, "app_icon.ico")
+
+    source_icon = None
+    if getattr(sys, 'frozen', False):
+        candidate = os.path.join(sys._MEIPASS, "assets", "icon.ico")
+        if os.path.isfile(candidate):
+            source_icon = candidate
+    if not source_icon:
+        candidate = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "icon.ico"))
+        if os.path.isfile(candidate):
+            source_icon = candidate
+
+    if source_icon and os.path.isfile(source_icon):
+        try:
+            if not os.path.isfile(dest_icon) or os.path.getsize(dest_icon) != os.path.getsize(source_icon):
+                import shutil
+                shutil.copy2(source_icon, dest_icon)
+        except Exception:
+            pass
+
+    if os.path.isfile(dest_icon):
+        return dest_icon
+    return source_icon or dest_icon
+
 def configure_flet_runtime():
     if sys.platform == "win32":
         aumid = get_app_user_model_id()
-        assets_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
-        icon_path = os.path.join(assets_dir, "icon.ico")
+        icon_path = get_persistent_icon_path()
         relaunch_cmd = sys.executable if getattr(sys, 'frozen', False) else f'"{sys.executable}" "{os.path.abspath(__file__)}"'
 
         os.environ["FLET_APP_USER_MODEL_ID"] = aumid
@@ -277,6 +309,7 @@ def configure_flet_runtime():
             pass
         try:
             register_aumid_in_registry(aumid, icon_path)
+            repair_implicit_app_shortcuts(icon_path)
             ensure_start_menu_shortcut(aumid, icon_path)
         except Exception:
             pass
@@ -290,8 +323,33 @@ def configure_flet_runtime():
         flet_bin = os.path.join(extract_dir, "flet", "flet_bin.exe")
         version_file = os.path.join(extract_dir, "version.txt")
         current_version = str(os.path.getmtime(sys.executable)) if os.path.isfile(sys.executable) else "unknown"
-        
-        needs_extract = not os.path.isfile(flet_exe) or not os.path.isfile(flet_bin)
+
+        def _is_flet_launcher(path):
+            if not os.path.isfile(path):
+                return False
+            try:
+                with open(path, "rb") as f:
+                    chunk = f.read(65536)
+                    return b"FletLauncher" in chunk or b"_CorExeMain" in chunk
+            except Exception:
+                return False
+
+        def _is_flutter_runner(path):
+            if not os.path.isfile(path):
+                return False
+            try:
+                with open(path, "rb") as f:
+                    content = f.read()
+                    return b"flutter" in content.lower() and b"FletLauncher" not in content and b"_CorExeMain" not in content
+            except Exception:
+                return False
+
+        needs_extract = (
+            not os.path.isfile(flet_exe)
+            or not os.path.isfile(flet_bin)
+            or _is_flet_launcher(flet_bin)
+            or not _is_flutter_runner(flet_bin)
+        )
         if not needs_extract:
             cached_version = ""
             if os.path.isfile(version_file):
@@ -304,7 +362,10 @@ def configure_flet_runtime():
                 needs_extract = True
                 import shutil
                 shutil.rmtree(extract_dir, ignore_errors=True)
-        
+        else:
+            import shutil
+            shutil.rmtree(extract_dir, ignore_errors=True)
+
         if os.path.isfile(bundled_zip) and needs_extract:
             os.makedirs(extract_dir, exist_ok=True)
             try:
@@ -315,16 +376,27 @@ def configure_flet_runtime():
             except Exception as e:
                 print(f"Warning: Failed to extract flet client (might be in use): {e}")
 
-        # Ensure flet_bin.exe exists if flet.exe is the raw Flutter binary
+        # Post-extraction sanity checks:
+        # 1. If flet_bin is a launcher, remove it immediately to prevent recursive execution
+        if os.path.isfile(flet_bin) and _is_flet_launcher(flet_bin):
+            try:
+                os.remove(flet_bin)
+            except Exception:
+                pass
+
+        # 2. Only copy flet_exe to flet_bin if flet_exe is genuinely the Flutter runner
         if os.path.isfile(flet_exe) and not os.path.isfile(flet_bin):
-            if os.path.getsize(flet_exe) > 140000:
+            if _is_flutter_runner(flet_exe) and not _is_flet_launcher(flet_exe):
                 try:
                     import shutil
                     shutil.copy2(flet_exe, flet_bin)
                 except Exception:
                     pass
-        
-        if os.path.isfile(flet_exe):
+
+        # 3. Direct FLET_VIEW_PATH to the valid client
+        if os.path.isfile(flet_exe) and _is_flutter_runner(flet_bin):
+            os.environ["FLET_VIEW_PATH"] = os.path.join(extract_dir, "flet")
+        elif os.path.isfile(flet_exe) and _is_flutter_runner(flet_exe) and not _is_flet_launcher(flet_exe):
             os.environ["FLET_VIEW_PATH"] = os.path.join(extract_dir, "flet")
         else:
             os.environ["FLET_VIEW_PATH"] = os.path.join(sys._MEIPASS, "flet_desktop", "app", "flet")
@@ -519,10 +591,54 @@ def register_aumid_in_registry(aumid, icon_path=None, app_name="Any Downloader")
             winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, app_name)
             if icon_path and os.path.exists(icon_path):
                 abs_ico = os.path.abspath(icon_path)
+                formatted_res = f"{abs_ico},0"
                 winreg.SetValueEx(key, "IconUri", 0, winreg.REG_SZ, abs_ico)
                 winreg.SetValueEx(key, "IconPath", 0, winreg.REG_SZ, abs_ico)
+                winreg.SetValueEx(key, "IconResource", 0, winreg.REG_SZ, formatted_res)
     except Exception as e:
         print(f"[AUMID] Registry setup error: {e}")
+
+def repair_implicit_app_shortcuts(icon_path):
+    """
+    Cleans and repairs any cached implicit taskbar shortcuts in
+    %APPDATA%\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\ImplicitAppShortcuts
+    that reference stale or deleted temporary paths (e.g. old PyInstaller _MEI directories).
+    """
+    if sys.platform != "win32" or not icon_path or not os.path.exists(icon_path):
+        return
+    try:
+        implicit_dir = os.path.expandvars(r"%APPDATA%\Microsoft\Internet Explorer\Quick Launch\User Pinned\ImplicitAppShortcuts")
+        if not os.path.isdir(implicit_dir):
+            return
+
+        abs_ico = os.path.abspath(icon_path)
+        ico_formatted = f"{abs_ico},0"
+
+        for root, dirs, files in os.walk(implicit_dir):
+            for file in files:
+                if file.endswith(".lnk") and "Any Downloader" in file:
+                    lnk_path = os.path.join(root, file)
+                    repaired = False
+                    try:
+                        import win32com.client
+                        shell = win32com.client.Dispatch("WScript.Shell")
+                        sc = shell.CreateShortcut(lnk_path)
+                        curr_ico = getattr(sc, "IconLocation", "")
+                        ico_file = curr_ico.split(",")[0].strip()
+                        if not ico_file or not os.path.isfile(ico_file) or "_MEI" in ico_file:
+                            sc.IconLocation = ico_formatted
+                            sc.Save()
+                            repaired = True
+                    except Exception:
+                        pass
+                    if not repaired:
+                        try:
+                            # If corrupted or unable to update in-place, delete the stale cache so Windows regenerates it
+                            os.remove(lnk_path)
+                        except Exception:
+                            pass
+    except Exception as e:
+        print(f"[Taskbar] Implicit shortcuts repair error: {e}")
 
 def set_window_relaunch_properties(hwnd, aumid, relaunch_cmd, display_name="Any Downloader", icon_res=None):
     if sys.platform != "win32":
@@ -586,10 +702,13 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
     if sys.platform != "win32":
         return
 
+    icon_path = icon_path or get_persistent_icon_path()
+
     def _worker():
         import time
         user32 = ctypes.windll.user32
         dwmapi = ctypes.windll.dwmapi
+        shell32 = ctypes.windll.shell32
         
         hwnd = None
         for _ in range(60):
@@ -629,6 +748,12 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
                 LR_LOADFROMFILE = 0x0010
 
                 # Configure 64-bit function prototypes for ctypes safety
+                user32.LoadImageW.argtypes = [
+                    wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT,
+                    ctypes.c_int, ctypes.c_int, wintypes.UINT
+                ]
+                user32.LoadImageW.restype = wintypes.HANDLE
+
                 SetClassLongPtrW = getattr(user32, "SetClassLongPtrW", getattr(user32, "SetClassLongW", None))
                 if SetClassLongPtrW:
                     SetClassLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
@@ -636,7 +761,13 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
 
                 user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 
-                h_sm = user32.LoadImageW(None, abs_icon, IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
+                # Match system scaling metrics for high-DPI clarity
+                cx_sm = user32.GetSystemMetrics(49) or 16  # SM_CXSMICON
+                cy_sm = user32.GetSystemMetrics(50) or 16  # SM_CYSMICON
+                cx_lg = user32.GetSystemMetrics(11) or 32  # SM_CXICON
+                cy_lg = user32.GetSystemMetrics(12) or 32  # SM_CYICON
+
+                h_sm = user32.LoadImageW(None, abs_icon, IMAGE_ICON, cx_sm, cy_sm, LR_LOADFROMFILE)
                 if h_sm:
                     user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, h_sm)
                     if SetClassLongPtrW:
@@ -645,7 +776,7 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
                         except Exception:
                             pass
 
-                h_bg = user32.LoadImageW(None, abs_icon, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
+                h_bg = user32.LoadImageW(None, abs_icon, IMAGE_ICON, cx_lg, cy_lg, LR_LOADFROMFILE)
                 if h_bg:
                     user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_bg)
                     if SetClassLongPtrW:
@@ -660,6 +791,7 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
         try:
             aumid = get_app_user_model_id()
             register_aumid_in_registry(aumid, icon_path, app_name=window_title)
+            repair_implicit_app_shortcuts(icon_path)
             ensure_start_menu_shortcut(aumid, icon_path, app_name=window_title)
             relaunch_cmd = sys.executable if getattr(sys, 'frozen', False) else f'"{sys.executable}" "{os.path.abspath(__file__)}"'
             formatted_icon = f"{os.path.abspath(icon_path)},0" if icon_path and os.path.exists(icon_path) else None
@@ -670,6 +802,8 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
                 display_name=window_title,
                 icon_res=formatted_icon
             )
+            # Invalidate shell icon caches so the Taskbar reflects the updated icon immediately
+            shell32.SHChangeNotify(0x08000000, 0, None, None)
         except Exception as e:
             print(f"[NativeStyling] Property store error: {e}")
 
@@ -778,7 +912,7 @@ async def main(page: ft.Page):
         assets_dir = os.path.join(sys._MEIPASS, "assets")
     else:
         assets_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
-    icon_ico_path = os.path.join(assets_dir, "icon.ico")
+    icon_ico_path = get_persistent_icon_path()
 
     page.title = "Any Downloader"
     page.window.icon = "icon.ico"
@@ -1081,6 +1215,13 @@ if __name__ == "__main__":
         sys.stdout = open(log_path, "w", encoding="utf-8", buffering=1)
         sys.stderr = sys.stdout
         print("Any Downloader Debug Log Started")
+
+    # Install in-memory log capture ring buffer for in-app bug report system
+    try:
+        from src.backend.bug_report import install_log_capture
+        install_log_capture()
+    except Exception:
+        pass
     
     # Resolve assets dir for PyInstaller
     if getattr(sys, 'frozen', False):

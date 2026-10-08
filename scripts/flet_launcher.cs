@@ -80,6 +80,24 @@ class FletLauncher {
     }
 
     static int Main(string[] args) {
+        // Recursion Guard 1: Environment variable guard
+        if (Environment.GetEnvironmentVariable("FLET_LAUNCHER_ACTIVE") == "1") {
+            return 1;
+        }
+
+        string currentExe;
+        try {
+            currentExe = Process.GetCurrentProcess().MainModule.FileName;
+        } catch {
+            currentExe = AppDomain.CurrentDomain.FriendlyName;
+        }
+        string currentExeName = Path.GetFileName(currentExe);
+
+        // Recursion Guard 2: If we are running under the name flet_bin.exe, never launch flet_bin.exe
+        if (string.Equals(currentExeName, "flet_bin.exe", StringComparison.OrdinalIgnoreCase)) {
+            return 1;
+        }
+
         // If launched with arguments by Python/Flet, forward to real Flutter runner
         bool hasFletArgs = args.Length >= 2 || (args.Length == 1 && (
             args[0].StartsWith("http") || 
@@ -94,6 +112,22 @@ class FletLauncher {
             if (!File.Exists(realExe)) {
                 return 1;
             }
+
+            // Recursion Guard 3: Never launch ourselves
+            try {
+                if (string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(realExe), StringComparison.OrdinalIgnoreCase)) {
+                    return 1;
+                }
+            } catch { }
+
+            // Recursion Guard 4: Verify realExe is not another copy of flet_launcher.exe
+            try {
+                var vi = FileVersionInfo.GetVersionInfo(realExe);
+                if (string.Equals(vi.OriginalFilename, "flet_launcher.exe", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(vi.InternalName, "flet_launcher.exe", StringComparison.OrdinalIgnoreCase)) {
+                    return 1;
+                }
+            } catch { }
 
             var sb = new StringBuilder();
             for (int i = 0; i < args.Length; i++) {
@@ -111,6 +145,8 @@ class FletLauncher {
             var psi = new ProcessStartInfo(realExe, sb.ToString()) {
                 UseShellExecute = false
             };
+            psi.EnvironmentVariables["FLET_LAUNCHER_ACTIVE"] = "1";
+
             try {
                 var proc = Process.Start(psi);
                 proc.WaitForExit();

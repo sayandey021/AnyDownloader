@@ -7,6 +7,7 @@ from src.backend.search_history import SearchHistoryManager
 from src.ui.settings_view import SettingsView
 from src.ui.download_card import DownloadCard
 from src.ui.fetch_dialog import FetchDialog
+from src.backend.bug_report import set_clipboard_text
 
 class MainView(ft.Container):
     def __init__(self, page: ft.Page):
@@ -1064,7 +1065,7 @@ class MainView(ft.Container):
                         return h
                     def make_copy_url(u):
                         def h(_):
-                            self._page.set_clipboard(u)
+                            set_clipboard_text(u, self._page)
                             self.show_snack("Link copied to clipboard", AppTheme.SUCCESS)
                         return h
                     def make_open_browser(u):

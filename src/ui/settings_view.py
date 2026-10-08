@@ -9,6 +9,8 @@ from src.backend.engine_manager import (
     update_engines,
 )
 import importlib.util
+from src.ui.bug_report_dialog import open_bug_report_dialog
+
 
 
 class SettingsView(ft.Container):
@@ -964,9 +966,58 @@ class SettingsView(ft.Container):
 
         load_dlls_btn = ft.FilledButton("Load System DLLs", icon=ft.Icons.DATA_OBJECT_ROUNDED, on_click=_load_dlls, bgcolor=AppTheme.SURFACE_VARIANT, color=AppTheme.TEXT_PRIMARY)
 
+        # Webhook URL configuration for serverless bug reports
+        webhook_field = ft.TextField(
+            label="Bug Report Webhook URL (Google Apps Script / Webhook)",
+            value=self.settings.get('bug_report_webhook_url', ''),
+            hint_text="https://script.google.com/macros/",
+            text_size=13,
+            bgcolor=AppTheme.SURFACE,
+            border_color=AppTheme.SURFACE_VARIANT,
+            focused_border_color=AppTheme.PRIMARY,
+            border_radius=8,
+            dense=True,
+            expand=True,
+        )
+
+        def _save_webhook_url(e):
+            val = (webhook_field.value or '').strip()
+            self.settings.set('bug_report_webhook_url', val)
+            self.settings.save()
+            if getattr(self, 'snack_bar', None) in self._page.overlay:
+                self._page.overlay.remove(self.snack_bar)
+            self.snack_bar = ft.SnackBar(
+                content=ft.Text("Bug report webhook URL updated!", color=AppTheme.TEXT_PRIMARY),
+                bgcolor=AppTheme.SUCCESS,
+                duration=3000
+            )
+            self._page.overlay.append(self.snack_bar)
+            self.snack_bar.open = True
+            self._page.update()
+
+        save_webhook_btn = ft.FilledButton(
+            "Save URL",
+            icon=ft.Icons.SAVE_ROUNDED,
+            on_click=_save_webhook_url,
+            bgcolor=AppTheme.PRIMARY,
+            color=ft.Colors.WHITE
+        )
+
+        webhook_card = ft.Container(
+            content=ft.Column([
+                ft.Text("Serverless Bug Report Webhook", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY, size=14),
+                ft.Text("Directs in-app bug reports to saayanstudiosoft@gmail.com. Paste your deployed Google Apps Script URL below:", color=AppTheme.TEXT_SECONDARY, size=12),
+                ft.Row([webhook_field, save_webhook_btn], spacing=10),
+            ], spacing=8),
+            padding=12,
+            border=ft.border.Border(top=b_side, right=b_side, bottom=b_side, left=b_side),
+            border_radius=10,
+            bgcolor=AppTheme.SURFACE
+        )
+
         advanced_expansion = ft.ExpansionTile(
-            title=ft.Text("Advanced Diagnostics & DLLs", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
-            subtitle=ft.Text("View detailed dependency list and loaded modules", color=AppTheme.TEXT_SECONDARY),
+            title=ft.Text("Advanced Diagnostics & Webhook Config", weight=ft.FontWeight.W_600, color=AppTheme.TEXT_PRIMARY),
+            subtitle=ft.Text("View detailed dependency list, loaded DLL modules, and endpoint settings", color=AppTheme.TEXT_SECONDARY),
             controls=[
                 ft.Container(
                     content=self.troubleshoot_column,
@@ -975,6 +1026,8 @@ class SettingsView(ft.Container):
                     border_radius=10,
                     bgcolor=AppTheme.SURFACE
                 ),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                webhook_card,
                 ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
                 ft.Row([load_dlls_btn]),
                 dll_container
@@ -989,9 +1042,17 @@ class SettingsView(ft.Container):
             color=AppTheme.TEXT_PRIMARY
         )
 
+        report_bug_btn = ft.FilledButton(
+            "Report a Bug",
+            icon=ft.Icons.BUG_REPORT_ROUNDED,
+            on_click=lambda e: open_bug_report_dialog(self._page),
+            bgcolor=ft.Colors.RED_500,
+            color=ft.Colors.WHITE
+        )
+
         troubleshoot_section = self._section("Troubleshoot", ft.Icons.BUILD_ROUNDED, [
             ft.Row([health_icon, health_text], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Row([refresh_btn, fix_btn], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
+            ft.Row([refresh_btn, fix_btn, report_bug_btn], alignment=ft.MainAxisAlignment.CENTER, spacing=15, wrap=True),
             ft.Divider(height=20, color=AppTheme.SURFACE_VARIANT),
             advanced_expansion
         ])

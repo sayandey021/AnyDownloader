@@ -39,6 +39,7 @@ DEFAULTS = {
     'sponsorblock_categories': ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro'],
     'engine_update_interval': 'weekly',  # 'never', 'daily', 'weekly', 'monthly'
     'engine_last_check_time': 0,  # Epoch timestamp
+    'bug_report_webhook_url': '',  # Google Apps Script Webhook URL
 }
 
 
