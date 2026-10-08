@@ -303,10 +303,10 @@ class BugReportDialog:
 
         form_body = ft.Container(
             content=scrollable_form,
-            height=460,
+            height=435,
         )
 
-        # ── 6. ACTIONS FOOTER ──
+        # ── 6. ACTIONS FOOTER (Compact, sleek Windows 11 style) ──
         self.progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2, color=ft.Colors.WHITE, visible=False)
         self.submit_btn = ft.FilledButton(
             "Submit Bug Report",
@@ -314,9 +314,10 @@ class BugReportDialog:
             icon_color=ft.Colors.WHITE,
             bgcolor=AppTheme.PRIMARY,
             color=ft.Colors.WHITE,
+            height=36,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding(20, 12, 20, 12),
+                padding=ft.Padding(16, 0, 16, 0),
             ),
             on_click=self._on_submit_clicked,
         )
@@ -325,14 +326,22 @@ class BugReportDialog:
             "Copy Report",
             icon=ft.Icons.CONTENT_COPY_ROUNDED,
             icon_color=AppTheme.TEXT_SECONDARY,
-            style=ft.ButtonStyle(color=AppTheme.TEXT_SECONDARY),
+            height=36,
+            style=ft.ButtonStyle(
+                color=AppTheme.TEXT_SECONDARY,
+                padding=ft.Padding(10, 0, 10, 0),
+            ),
             tooltip="Copy markdown bug report to clipboard",
             on_click=self._copy_full_report,
         )
 
         self.cancel_btn = ft.TextButton(
             "Cancel",
-            style=ft.ButtonStyle(color=AppTheme.TEXT_SECONDARY),
+            height=36,
+            style=ft.ButtonStyle(
+                color=AppTheme.TEXT_SECONDARY,
+                padding=ft.Padding(12, 0, 12, 0),
+            ),
             on_click=self._close_dialog,
         )
 
@@ -342,11 +351,13 @@ class BugReportDialog:
                     self.copy_btn,
                     ft.Container(expand=True),
                     self.cancel_btn,
-                    ft.Row([self.progress_ring, self.submit_btn], spacing=8),
+                    self.progress_ring,
+                    self.submit_btn,
                 ],
+                spacing=8,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding(28, 12, 28, 18),
+            padding=ft.Padding(20, 6, 20, 8),
         )
 
         # Complete Modal Container with 680px width

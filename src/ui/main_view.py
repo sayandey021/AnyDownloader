@@ -31,6 +31,9 @@ class MainView(ft.Container):
         self._history_dirty = True
         self._last_history_filter = None
         self._filesize_cache = {}
+        self._history_page_limit = 24
+        self._downloads_page_limit = 30
+        self._downloads_dirty = True
         
         self.all_downloads = []
         self.downloads_list_container = ft.Container(expand=True)
@@ -74,8 +77,8 @@ class MainView(ft.Container):
                 restored_playlist_url=item.get('playlist_url')
             )
             self.all_downloads.append(card)
-        self.refresh_downloads_list()
-        self.refresh_search_history()
+        self._downloads_dirty = True
+        self._history_dirty = True
 
     def setup_ui(self):
         # Navigation Sidebar
@@ -543,6 +546,7 @@ class MainView(ft.Container):
         self._page.update()
 
     def on_history_filter_change(self, e):
+        self._history_page_limit = 24
         self.refresh_search_history(force=True)
 
     def _format_file_size(self, size_bytes):
@@ -638,7 +642,8 @@ class MainView(ft.Container):
             self.main_area.content = self.search_view
         elif idx == 1:
             self.current_mode = "search_history"
-            self.refresh_search_history()
+            if getattr(self, '_history_dirty', True):
+                self.refresh_search_history()
             self.main_area.content = self.search_history_view
         elif idx == 2:
             self.current_mode = "downloads"
@@ -647,6 +652,8 @@ class MainView(ft.Container):
             self.history_toolbar.visible = True
             self.clear_all_btn.visible = True
             self.main_area.content = self.history_view
+            if getattr(self, '_downloads_dirty', True):
+                self.refresh_downloads_list(force=True)
         elif idx == 3:
             self.current_mode = "settings"
             self.header_text.value = "Settings"
@@ -668,8 +675,11 @@ class MainView(ft.Container):
             self.clear_all_btn.visible = False
             self.history_toolbar.visible = False
             
-        self.refresh_downloads_list()
-        self.safe_update()
+        try:
+            self.main_area.update()
+            self.nav_rail.update()
+        except Exception:
+            self.safe_update()
 
     def rebuild_app(self, show_notification=True):
         title_bar = getattr(self._page, 'custom_title_bar', None)
@@ -825,6 +835,208 @@ class MainView(ft.Container):
         )
         self._page.show_dialog(self._current_dialog)
 
+    def _create_history_card(self, item):
+        url = item['url']
+        title = item['title']
+        thumb = item['thumbnail']
+        subtitle = item['subtitle']
+        final_fp = item['final_filepath']
+        itype = item['type']
+        raw_data = item['raw']
+
+        def make_click_handler(u, fp):
+            def handler(e):
+                import os
+                if fp and os.path.exists(fp):
+                    os.startfile(fp)
+                elif u:
+                    self.url_input.value = u
+                    self.nav_rail.selected_index = 0
+                    class DummyControl:
+                        def __init__(self):
+                            self.selected_index = 0
+                    class DummyEvent:
+                        def __init__(self):
+                            self.control = DummyControl()
+                    self.on_nav_change(DummyEvent())
+                    self.fetch_info(None)
+            return handler
+
+        def make_delete_handler(u, it, raw):
+            def handler(e):
+                if it == 'search':
+                    self.search_history_manager.remove_search(u)
+                elif it == 'download':
+                    tid = raw.get('task_id')
+                    if tid:
+                        self.history_manager.remove(tid)
+                self.refresh_search_history(force=True)
+            return handler
+
+        # Thumbnail element
+        thumb_icon = ft.Icons.AUDIOTRACK_ROUNDED if ('MP3' in subtitle or 'Spotify' in subtitle) else ft.Icons.SMART_DISPLAY_ROUNDED
+        if thumb:
+            thumb_element = ft.Image(
+                src=thumb,
+                width=110,
+                height=62,
+                fit=ft.BoxFit.COVER,
+                border_radius=8,
+                error_content=ft.Container(
+                    content=ft.Icon(thumb_icon, size=24, color=AppTheme.TEXT_SECONDARY),
+                    width=110,
+                    height=62,
+                    bgcolor=AppTheme.SURFACE_VARIANT,
+                    border_radius=8,
+                    alignment=ft.Alignment(0, 0)
+                )
+            )
+        else:
+            thumb_element = ft.Container(
+                content=ft.Icon(thumb_icon, size=24, color=AppTheme.TEXT_SECONDARY),
+                width=110,
+                height=62,
+                bgcolor=AppTheme.SURFACE_VARIANT,
+                border_radius=8,
+                alignment=ft.Alignment(0, 0)
+            )
+
+        # Popup menu options
+        menu_items = []
+        import os
+
+        def make_menu_item(icon_name, label_text, on_click_fn, is_destructive=False, icon_color=None):
+            i_col = AppTheme.ERROR if is_destructive else (icon_color or AppTheme.PRIMARY)
+            t_col = AppTheme.ERROR if is_destructive else AppTheme.TEXT_PRIMARY
+            return ft.PopupMenuItem(
+                content=ft.Row([
+                    ft.Container(
+                        content=ft.Icon(icon_name, size=16, color=i_col),
+                        width=24,
+                        alignment=ft.Alignment(-1, 0)
+                    ),
+                    ft.Text(label_text, size=13, weight=ft.FontWeight.W_500, color=t_col),
+                ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                height=36,
+                padding=ft.Padding(left=12, right=16, top=0, bottom=0),
+                on_click=on_click_fn
+            )
+
+        if final_fp and os.path.exists(final_fp):
+            def make_open_file(p):
+                return lambda _: os.startfile(p)
+            def make_open_folder(p):
+                import subprocess
+                return lambda _: subprocess.Popen(
+                    f'explorer /select,"{p}"',
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                )
+            menu_items.append(make_menu_item(ft.Icons.PLAY_ARROW_ROUNDED, "Open File", make_open_file(final_fp), icon_color=AppTheme.SUCCESS))
+            menu_items.append(make_menu_item(ft.Icons.FOLDER_OPEN_ROUNDED, "Show in Folder", make_open_folder(final_fp), icon_color=AppTheme.ACCENT))
+
+        if url:
+            def make_search_again(u):
+                def h(_):
+                    self.url_input.value = u
+                    self.nav_rail.selected_index = 0
+                    class DummyControl:
+                        def __init__(self):
+                            self.selected_index = 0
+                    class DummyEvent:
+                        def __init__(self):
+                            self.control = DummyControl()
+                    self.on_nav_change(DummyEvent())
+                    self.fetch_info(None)
+                return h
+            def make_copy_url(u):
+                def h(_):
+                    set_clipboard_text(u, self._page)
+                    self.show_snack("Link copied to clipboard", AppTheme.SUCCESS)
+                return h
+            def make_open_browser(u):
+                import webbrowser
+                return lambda _: webbrowser.open(u)
+
+            menu_items.append(make_menu_item(ft.Icons.SEARCH_ROUNDED, "Search Again", make_search_again(url), icon_color=AppTheme.PRIMARY))
+            menu_items.append(make_menu_item(ft.Icons.CONTENT_COPY_ROUNDED, "Copy Link", make_copy_url(url), icon_color=AppTheme.ACCENT))
+            menu_items.append(make_menu_item(ft.Icons.OPEN_IN_NEW_ROUNDED, "Open in Browser", make_open_browser(url), icon_color=AppTheme.TEXT_SECONDARY))
+
+        # Divider before destructive action
+        if menu_items:
+            menu_items.append(
+                ft.PopupMenuItem(
+                    content=ft.Divider(height=1, thickness=1, color=AppTheme.SURFACE_VARIANT),
+                    height=9,
+                    disabled=True,
+                    padding=ft.Padding(left=8, right=8, top=4, bottom=4),
+                )
+            )
+
+        menu_items.append(make_menu_item(
+            ft.Icons.DELETE_OUTLINE_ROUNDED,
+            "Remove from History",
+            make_delete_handler(url, itype, raw_data),
+            is_destructive=True
+        ))
+
+        card = ft.Container(
+            col={"xs": 12, "sm": 12, "md": 6, "lg": 6, "xl": 6},
+            bgcolor=AppTheme.SURFACE,
+            border_radius=12,
+            padding=10,
+            border=ft.Border.all(1, AppTheme.SURFACE_VARIANT),
+            content=ft.Row([
+                # 16:9 Thumbnail
+                ft.Container(
+                    content=thumb_element,
+                    width=110,
+                    height=62,
+                    border_radius=8,
+                    bgcolor=ft.Colors.BLACK,
+                    alignment=ft.Alignment(0, 0),
+                    clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                ),
+                # Title & Metadata
+                ft.Column([
+                    ft.Text(
+                        title,
+                        size=13,
+                        weight=ft.FontWeight.W_600,
+                        color=AppTheme.TEXT_PRIMARY,
+                        max_lines=2,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
+                    ft.Text(
+                        subtitle,
+                        size=11,
+                        color=AppTheme.TEXT_SECONDARY,
+                        max_lines=1,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
+                ], expand=True, spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+                # Options Menu
+                ft.PopupMenuButton(
+                    items=menu_items,
+                    icon=ft.Icons.MORE_VERT_ROUNDED,
+                    icon_color=AppTheme.TEXT_SECONDARY,
+                    icon_size=18,
+                    tooltip="Options",
+                    bgcolor=AppTheme.SURFACE,
+                    shadow_color=ft.Colors.BLACK,
+                    elevation=14,
+                    shape=ft.RoundedRectangleBorder(
+                        radius=12,
+                        side=ft.BorderSide(1, AppTheme.SURFACE_VARIANT)
+                    ),
+                    menu_padding=ft.Padding(left=4, top=6, right=4, bottom=6),
+                    splash_radius=18,
+                )
+            ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ink=True,
+            on_click=make_click_handler(url, final_fp),
+        )
+        return card
+
     def refresh_search_history(self, force=False):
         selected_filter = "all"
         if hasattr(self, 'history_filter_segment') and self.history_filter_segment.selected:
@@ -874,6 +1086,9 @@ class MainView(ft.Container):
                         self._filesize_cache[final_fp] = size_str
                     except Exception:
                         size_str = ""
+                        self._filesize_cache[final_fp] = ""
+                else:
+                    self._filesize_cache[final_fp] = ""
             if not size_str:
                 if info.get('filesize'):
                     size_str = self._format_file_size(info['filesize'])
@@ -950,207 +1165,35 @@ class MainView(ft.Container):
             )
         else:
             self.clear_search_history_btn.visible = True
-            for item in items_to_display:
-                url = item['url']
-                title = item['title']
-                thumb = item['thumbnail']
-                subtitle = item['subtitle']
-                final_fp = item['final_filepath']
-                itype = item['type']
-                raw_data = item['raw']
+            page_limit = getattr(self, '_history_page_limit', 24)
+            displayed_items = items_to_display[:page_limit]
 
-                def make_click_handler(u, fp):
-                    def handler(e):
-                        import os
-                        if fp and os.path.exists(fp):
-                            os.startfile(fp)
-                        elif u:
-                            self.url_input.value = u
-                            self.nav_rail.selected_index = 0
-                            class DummyControl:
-                                def __init__(self):
-                                    self.selected_index = 0
-                            class DummyEvent:
-                                def __init__(self):
-                                    self.control = DummyControl()
-                            self.on_nav_change(DummyEvent())
-                            self.fetch_info(None)
-                    return handler
+            for item in displayed_items:
+                self.search_history_grid.controls.append(self._create_history_card(item))
 
-                def make_delete_handler(u, it, raw):
-                    def handler(e):
-                        if it == 'search':
-                            self.search_history_manager.remove_search(u)
-                        elif it == 'download':
-                            tid = raw.get('task_id')
-                            if tid:
-                                self.history_manager.remove(tid)
-                        self.refresh_search_history(force=True)
-                    return handler
+            if len(items_to_display) > page_limit:
+                remaining = len(items_to_display) - page_limit
+                def load_more_history(e):
+                    self._history_page_limit += 24
+                    self.refresh_search_history(force=True)
 
-                # Thumbnail element
-                thumb_icon = ft.Icons.AUDIOTRACK_ROUNDED if ('MP3' in subtitle or 'Spotify' in subtitle) else ft.Icons.SMART_DISPLAY_ROUNDED
-                if thumb:
-                    thumb_element = ft.Image(
-                        src=thumb,
-                        width=110,
-                        height=62,
-                        fit=ft.BoxFit.COVER,
-                        border_radius=8,
-                        error_content=ft.Container(
-                            content=ft.Icon(thumb_icon, size=24, color=AppTheme.TEXT_SECONDARY),
-                            width=110,
-                            height=62,
+                load_more_btn = ft.Container(
+                    content=ft.FilledButton(
+                        f"Load More History ({remaining} remaining)",
+                        icon=ft.Icons.EXPAND_MORE_ROUNDED,
+                        style=ft.ButtonStyle(
                             bgcolor=AppTheme.SURFACE_VARIANT,
-                            border_radius=8,
-                            alignment=ft.Alignment(0, 0)
-                        )
-                    )
-                else:
-                    thumb_element = ft.Container(
-                        content=ft.Icon(thumb_icon, size=24, color=AppTheme.TEXT_SECONDARY),
-                        width=110,
-                        height=62,
-                        bgcolor=AppTheme.SURFACE_VARIANT,
-                        border_radius=8,
-                        alignment=ft.Alignment(0, 0)
-                    )
-
-                # Popup menu options
-                menu_items = []
-                import os
-
-                def make_menu_item(icon_name, label_text, on_click_fn, is_destructive=False, icon_color=None):
-                    i_col = AppTheme.ERROR if is_destructive else (icon_color or AppTheme.PRIMARY)
-                    t_col = AppTheme.ERROR if is_destructive else AppTheme.TEXT_PRIMARY
-                    return ft.PopupMenuItem(
-                        content=ft.Row([
-                            ft.Container(
-                                content=ft.Icon(icon_name, size=16, color=i_col),
-                                width=24,
-                                alignment=ft.Alignment(-1, 0)
-                            ),
-                            ft.Text(label_text, size=13, weight=ft.FontWeight.W_500, color=t_col),
-                        ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                        height=36,
-                        padding=ft.Padding(left=12, right=16, top=0, bottom=0),
-                        on_click=on_click_fn
-                    )
-
-                if final_fp and os.path.exists(final_fp):
-                    def make_open_file(p):
-                        return lambda _: os.startfile(p)
-                    def make_open_folder(p):
-                        import subprocess
-                        return lambda _: subprocess.Popen(
-                            f'explorer /select,"{p}"',
-                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-                        )
-                    menu_items.append(make_menu_item(ft.Icons.PLAY_ARROW_ROUNDED, "Open File", make_open_file(final_fp), icon_color=AppTheme.SUCCESS))
-                    menu_items.append(make_menu_item(ft.Icons.FOLDER_OPEN_ROUNDED, "Show in Folder", make_open_folder(final_fp), icon_color=AppTheme.ACCENT))
-
-                if url:
-                    def make_search_again(u):
-                        def h(_):
-                            self.url_input.value = u
-                            self.nav_rail.selected_index = 0
-                            class DummyControl:
-                                def __init__(self):
-                                    self.selected_index = 0
-                            class DummyEvent:
-                                def __init__(self):
-                                    self.control = DummyControl()
-                            self.on_nav_change(DummyEvent())
-                            self.fetch_info(None)
-                        return h
-                    def make_copy_url(u):
-                        def h(_):
-                            set_clipboard_text(u, self._page)
-                            self.show_snack("Link copied to clipboard", AppTheme.SUCCESS)
-                        return h
-                    def make_open_browser(u):
-                        import webbrowser
-                        return lambda _: webbrowser.open(u)
-
-                    menu_items.append(make_menu_item(ft.Icons.SEARCH_ROUNDED, "Search Again", make_search_again(url), icon_color=AppTheme.PRIMARY))
-                    menu_items.append(make_menu_item(ft.Icons.CONTENT_COPY_ROUNDED, "Copy Link", make_copy_url(url), icon_color=AppTheme.ACCENT))
-                    menu_items.append(make_menu_item(ft.Icons.OPEN_IN_NEW_ROUNDED, "Open in Browser", make_open_browser(url), icon_color=AppTheme.TEXT_SECONDARY))
-
-                # Divider before destructive action
-                if menu_items:
-                    menu_items.append(
-                        ft.PopupMenuItem(
-                            content=ft.Divider(height=1, thickness=1, color=AppTheme.SURFACE_VARIANT),
-                            height=9,
-                            disabled=True,
-                            padding=ft.Padding(left=8, right=8, top=4, bottom=4),
-                        )
-                    )
-
-                menu_items.append(make_menu_item(
-                    ft.Icons.DELETE_OUTLINE_ROUNDED,
-                    "Remove from History",
-                    make_delete_handler(url, itype, raw_data),
-                    is_destructive=True
-                ))
-
-                card = ft.Container(
-                    col={"xs": 12, "sm": 12, "md": 6, "lg": 6, "xl": 6},
-                    bgcolor=AppTheme.SURFACE,
-                    border_radius=12,
-                    padding=10,
-                    border=ft.Border.all(1, AppTheme.SURFACE_VARIANT),
-                    content=ft.Row([
-                        # 16:9 Thumbnail
-                        ft.Container(
-                            content=thumb_element,
-                            width=110,
-                            height=62,
-                            border_radius=8,
-                            bgcolor=ft.Colors.BLACK,
-                            alignment=ft.Alignment(0, 0),
-                            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                            color=AppTheme.TEXT_PRIMARY,
+                            shape=ft.RoundedRectangleBorder(radius=10),
+                            padding=ft.Padding(left=20, right=20, top=14, bottom=14)
                         ),
-                        # Title & Metadata
-                        ft.Column([
-                            ft.Text(
-                                title,
-                                size=13,
-                                weight=ft.FontWeight.W_600,
-                                color=AppTheme.TEXT_PRIMARY,
-                                max_lines=2,
-                                overflow=ft.TextOverflow.ELLIPSIS,
-                            ),
-                            ft.Text(
-                                subtitle,
-                                size=11,
-                                color=AppTheme.TEXT_SECONDARY,
-                                max_lines=1,
-                                overflow=ft.TextOverflow.ELLIPSIS,
-                            ),
-                        ], expand=True, spacing=4, alignment=ft.MainAxisAlignment.CENTER),
-                        # Options Menu
-                        ft.PopupMenuButton(
-                            items=menu_items,
-                            icon=ft.Icons.MORE_VERT_ROUNDED,
-                            icon_color=AppTheme.TEXT_SECONDARY,
-                            icon_size=18,
-                            tooltip="Options",
-                            bgcolor=AppTheme.SURFACE,
-                            shadow_color=ft.Colors.BLACK,
-                            elevation=14,
-                            shape=ft.RoundedRectangleBorder(
-                                radius=12,
-                                side=ft.BorderSide(1, AppTheme.SURFACE_VARIANT)
-                            ),
-                            menu_padding=ft.Padding(left=4, top=6, right=4, bottom=6),
-                            splash_radius=18,
-                        )
-                    ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                    ink=True,
-                    on_click=make_click_handler(url, final_fp),
+                        on_click=load_more_history
+                    ),
+                    alignment=ft.Alignment.CENTER,
+                    padding=ft.Padding(top=10, bottom=20, left=0, right=0),
+                    col={"xs": 12, "sm": 12, "md": 12, "lg": 12}
                 )
-                self.search_history_grid.controls.append(card)
+                self.search_history_grid.controls.append(load_more_btn)
         
         self._history_dirty = False
         self._last_history_filter = selected_filter
@@ -1355,14 +1398,17 @@ class MainView(ft.Container):
         
     def on_card_state_change(self, card):
         self._history_dirty = True
-        self.refresh_downloads_list()
+        self._downloads_dirty = True
+        if self.current_mode == "downloads":
+            self.refresh_downloads_list(force=True)
         self.process_queue()
         
     def on_filter_change(self, e):
         print(f"[DEBUG] on_filter_change triggered with value: {e.control.value}")
         if getattr(self, 'filter_dropdown', None):
             self.filter_dropdown.value = e.control.value
-        self.refresh_downloads_list(filter_val_override=e.control.value)
+        self._downloads_page_limit = 30
+        self.refresh_downloads_list(filter_val_override=e.control.value, force=True)
 
     def pause_all_downloads(self, e):
         for card in list(self.all_downloads):
@@ -1390,7 +1436,11 @@ class MainView(ft.Container):
         else:
             self.show_snack("Default folder not found", AppTheme.ERROR)
 
-    def refresh_downloads_list(self, filter_val_override=None):
+    def refresh_downloads_list(self, filter_val_override=None, force=False):
+        if self.current_mode != "downloads" and not force:
+            self._downloads_dirty = True
+            return
+
         # Remove deleted cards safely
         to_remove = [c for c in self.all_downloads if getattr(c, 'is_deleted', False)]
         for c in to_remove:
@@ -1672,14 +1722,42 @@ class MainView(ft.Container):
                 
         print(f"[DEBUG] refresh_downloads_list matched {visible_count} cards out of {len(self.all_downloads)}")
                 
-        self.downloads_list.controls = new_controls
+        page_limit = getattr(self, '_downloads_page_limit', 30)
+        if len(new_controls) > page_limit:
+            displayed = new_controls[:page_limit]
+            remaining = len(new_controls) - page_limit
+
+            def load_more_downloads(e):
+                self._downloads_page_limit += 30
+                self.refresh_downloads_list(force=True)
+
+            displayed.append(
+                ft.Container(
+                    content=ft.FilledButton(
+                        f"Load More Downloads ({remaining} remaining)",
+                        icon=ft.Icons.EXPAND_MORE_ROUNDED,
+                        style=ft.ButtonStyle(
+                            bgcolor=AppTheme.SURFACE_VARIANT,
+                            color=AppTheme.TEXT_PRIMARY,
+                            shape=ft.RoundedRectangleBorder(radius=10),
+                            padding=ft.Padding(left=20, right=20, top=14, bottom=14)
+                        ),
+                        on_click=load_more_downloads
+                    ),
+                    alignment=ft.Alignment.CENTER,
+                    padding=ft.Padding(top=10, bottom=20, left=0, right=0)
+                )
+            )
+            self.downloads_list.controls = displayed
+        else:
+            self.downloads_list.controls = new_controls
+
+        self._downloads_dirty = False
         if hasattr(self, 'downloads_list_container'):
             try:
                 self.downloads_list_container.update()
             except Exception:
                 pass
-
-        self.safe_update()
 
     def set_loading(self, is_loading):
         self.loading_ring.visible = is_loading

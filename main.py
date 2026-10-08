@@ -698,7 +698,7 @@ def set_window_relaunch_properties(hwnd, aumid, relaunch_cmd, display_name="Any 
         print(f"[PropertyStore] Error: {e}")
         return False
 
-def apply_native_window_styling(window_title="Any Downloader", icon_path=None, dark=True):
+def apply_native_window_styling(window_title="Any Downloader", icon_path=None, dark=True, bg_color=None, text_color=None):
     if sys.platform != "win32":
         return
 
@@ -736,6 +736,44 @@ def apply_native_window_styling(window_title="Any Downloader", icon_path=None, d
                 dwmapi.DwmSetWindowAttribute(hwnd, 19, ctypes.byref(val), ctypes.sizeof(val))
         except Exception:
             pass
+
+        # 1b. Windows 11 title bar exact caption and text color matching
+        try:
+            from src.ui.theme import AppTheme
+            hex_bg = bg_color or AppTheme.BACKGROUND
+            hex_txt = text_color or AppTheme.TEXT_PRIMARY
+
+            def _to_colorref(hex_str):
+                if not hex_str:
+                    return None
+                s = str(hex_str).lstrip('#')
+                if len(s) == 6:
+                    r = int(s[0:2], 16)
+                    g = int(s[2:4], 16)
+                    b = int(s[4:6], 16)
+                    return (b << 16) | (g << 8) | r
+                return None
+
+            c_bg = _to_colorref(hex_bg)
+            if c_bg is not None:
+                bg_val = ctypes.c_uint32(c_bg)
+                DWMWA_CAPTION_COLOR = 35
+                dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, ctypes.byref(bg_val), ctypes.sizeof(bg_val))
+
+            c_txt = _to_colorref(hex_txt)
+            if c_txt is not None:
+                txt_val = ctypes.c_uint32(c_txt)
+                DWMWA_TEXT_COLOR = 36
+                dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, ctypes.byref(txt_val), ctypes.sizeof(txt_val))
+
+            # Force non-client area frame to repaint immediately
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOZORDER = 0x0004
+            SWP_FRAMECHANGED = 0x0020
+            user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED)
+        except Exception as e:
+            print(f"[NativeStyling] Caption color error: {e}")
 
         # 2. Native Win32 window icons (Titlebar small icon + Taskbar big icon)
         if icon_path and os.path.exists(icon_path):
@@ -925,7 +963,7 @@ async def main(page: ft.Page):
     page.window.bgcolor = AppTheme.BACKGROUND
     page.padding = 0
     page.window.prevent_close = True
-    page.window.title_bar_hidden = True
+    page.window.title_bar_hidden = False
     page.window.visible = False
 
     apply_native_window_styling("Any Downloader", icon_ico_path, dark=(AppTheme.MODE == 'dark'))
@@ -1072,9 +1110,7 @@ async def main(page: ft.Page):
         remember_checkbox.value = False
         close_dialog.open = True
         page.update()
-
-    title_bar = CustomTitleBar(page, on_close_click=request_close)
-    page.custom_title_bar = title_bar
+    page.custom_title_bar = None
 
     def window_event(e):
         event_val = str(getattr(e, "type", getattr(e, "data", ""))).lower()
@@ -1083,9 +1119,6 @@ async def main(page: ft.Page):
         if "close" in event_val:
             request_close()
             return
-        elif any(k in event_val for k in ("max", "restore", "unmax")):
-            title_bar.update_maximize_state(page.window.maximized)
-            page.update()
 
     page.window.on_event = window_event
 
@@ -1093,7 +1126,7 @@ async def main(page: ft.Page):
 
     if is_ffmpeg_available():
         main_view = MainView(page)
-        page.add(ft.Column([title_bar, main_view], spacing=0, expand=True))
+        page.add(main_view)
 
         # Scheduled backend engine update check (daily, weekly, monthly)
         def _check_engine_updates_startup():
@@ -1145,7 +1178,7 @@ async def main(page: ft.Page):
             ),
             expand=True,
         )
-        page.add(ft.Column([title_bar, loading_view], spacing=0, expand=True))
+        page.add(loading_view)
         
         def update_progress(percent, text):
             progress_bar.value = percent / 100.0 if percent > 0 else None
@@ -1184,7 +1217,7 @@ async def main(page: ft.Page):
                     ),
                     expand=True,
                 )
-                page.add(ft.Column([title_bar, restart_view], spacing=0, expand=True))
+                page.add(restart_view)
                 page.update()
             except Exception as e:
                 status_text.value = f"Failed to download FFmpeg: {e}\nPlease restart the app or install FFmpeg manually."
