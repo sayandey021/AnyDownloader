@@ -1,9 +1,62 @@
+# ==========================================
+# Byte-compiled / Python Cache
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==========================================
+# Virtual Environments
+# ==========================================
+.env
+.venv/
+env/
+venv/
+ENV/
+
+# ==========================================
+# Build & Packaging Artifacts
+# ==========================================
 build/
 dist/
 bin/
 ffmpeg/
 temp/
-__pycache__/
-*.pyc
 MsixTemp/
+*.spec.bak
+*.bak
+
+# ==========================================
+# OS-Specific Metadata Files
+# ==========================================
+desktop.ini
+Desktop.ini
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+.DS_Store
+.AppleDouble
+.LSOverride
+*~
+
+# ==========================================
+# IDE & Editor Directories
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+.kilo/
+
+# ==========================================
+# Diagnostic Dumps, Logs & Temp Artifacts
+# ==========================================
 debug_dl.json
+event_log.txt
+scribd_embed.html
+*.log
+*.tmp
+scratch/dumps/temp_*
+scratch/dumps/test_*

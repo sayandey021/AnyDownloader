@@ -970,7 +970,7 @@ class SettingsView(ft.Container):
         webhook_field = ft.TextField(
             label="Bug Report Webhook URL (Google Apps Script / Webhook)",
             value=self.settings.get('bug_report_webhook_url', ''),
-            hint_text="https://script.google.com/macros/",
+            hint_text="https://script.google.com/macros/s/AKfycbzpwvHeRik869ydQHaAoRvvPN5QV6BKhQTmuGcE8jP4QbYEsHSEzrSHWkF52eSAPUI/exec",
             text_size=13,
             bgcolor=AppTheme.SURFACE,
             border_color=AppTheme.SURFACE_VARIANT,
